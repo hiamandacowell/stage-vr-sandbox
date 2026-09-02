@@ -2484,8 +2484,15 @@ function bootPracticeSpace() {
     }
 
     if (verb === 'move') {
+      // rigFor, like hide and size above. Without it this read panels[NaN] for
+      // anything that is not the piano or a number, so move on the music found
+      // nothing - and it had already put the menu away by then, which left the
+      // row invisible but still pickable. Nothing happened and the menu was
+      // gone, which is a worse way to fail than either on its own.
+      var moveTarget = rigFor(arg);
+      if (!moveTarget) { layoutMenu(); return; }
       menu.open = false;
-      grab(arg === 'piano' ? piano : panels[parseInt(arg, 10)]);
+      grab(moveTarget);
       return;
     }
 
