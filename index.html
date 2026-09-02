@@ -665,24 +665,50 @@ function bootPracticeSpace() {
   // the end of the piece, so they stop early rather than showing blank staves.
   function bandCount() {
     if (!scoreSystems.length) return scorePages.length;
-    return Math.max(1, scoreSystems.length - (BAND_SYSTEMS - 1));
+    return Math.max(1, bandList().length);
   }
 
-  // The band starting at system i: that system and the next few, as long as
-  // they are on the same page. A band cannot straddle a page turn, because
-  // the two halves are different pictures.
+  // Every band, worked out once from the systems. A band is BAND_SYSTEMS
+  // systems on one page, stepped one system at a time, so each band shares all
+  // but one line with the one before it and you never lose your place.
+  //
+  // A band cannot straddle a page turn, because the two halves are different
+  // pictures. So the last system or two of a page cannot start a band of their
+  // own: the page runs out under them and what you would get is a band half
+  // the height of every other one. Since the width is what is held constant --
+  // that is what keeps the ink a fixed size -- a short band shows up as the
+  // music shrinking every time you cross a page boundary, which is the last
+  // thing you want mid-phrase. Those systems are still read; they are the
+  // bottom of the bands that start above them.
+  //
+  // A page with fewer systems than a band keeps one short band, because the
+  // alternative is music you cannot reach at all.
+  var scoreBands = [], bandsFrom = null;
+  function bandList() {
+    if (bandsFrom === scoreSystems) return scoreBands;
+    bandsFrom = scoreSystems;
+    scoreBands = [];
+    for (var i = 0; i < scoreSystems.length; i++) {
+      var first = scoreSystems[i], last = first, k;
+      for (k = 1; k < BAND_SYSTEMS; k++) {
+        var nxt = scoreSystems[i + k];
+        if (!nxt || nxt.page !== first.page) break;
+        last = nxt;
+      }
+      var pageStart = (i === 0 || scoreSystems[i - 1].page !== first.page);
+      if (k < BAND_SYSTEMS && !pageStart) continue;
+      scoreBands.push({ page: first.page, y0: first.y0, y1: last.y1 });
+    }
+    return scoreBands;
+  }
+
   function bandRange(i) {
     if (!scoreSystems.length) {
       return { page: Math.max(0, Math.min(scorePages.length - 1, i)), y0: 0, y1: 1 };
     }
-    i = Math.max(0, Math.min(scoreSystems.length - 1, i));
-    var first = scoreSystems[i], last = first;
-    for (var k = 1; k < BAND_SYSTEMS; k++) {
-      var nxt = scoreSystems[i + k];
-      if (!nxt || nxt.page !== first.page) break;
-      last = nxt;
-    }
-    return { page: first.page, y0: first.y0, y1: last.y1 };
+    var list = bandList();
+    if (!list.length) return { page: 0, y0: 0, y1: 1 };
+    return list[Math.max(0, Math.min(list.length - 1, i))];
   }
 
   function showBand(i) {
@@ -1925,6 +1951,81 @@ function bootPracticeSpace() {
     reticleRing.material.opacity = p > 0.02 ? 0.95 : 0;
   }
 
+  // ---------- turning the page without hands ----------
+  //
+  // Opening a menu, picking a tile and closing it again every couple of lines
+  // is not a thing a pianist can do. Their hands are on the keys and the phone
+  // is in a box on their face. So there is no control: reading the bottom of
+  // the band is what turns it, the way your eye reaching the end of a line is
+  // already the signal on paper.
+  //
+  // The trigger is inside the lower part of the music itself, not below it.
+  // Below the music is where the keys are and where a pianist looks constantly,
+  // and an advance every time you glance at your hands would be unusable.
+  //
+  // It only ever goes forward. Going back is a decision, and decisions belong
+  // on a tile you chose to look at.
+  //
+  // Once it has turned it will not turn again until your gaze has climbed back
+  // out of the zone. The new band lands centred where the old one was, so the
+  // eyes that just triggered it are still sitting in the trigger, and a timer
+  // alone would march you through the piece while you stared. Going up to the
+  // top of the new band is what reading it means anyway, so the re-arm costs a
+  // reader nothing and costs a starer everything.
+  var READ_ZONE = 0.30;     // the bottom third of the band, near enough
+  var READ_HOLD = 0.9;      // seconds of looking there before it turns
+  var READ_REST = 2.2;      // seconds before it will turn again
+  var readHeld = 0, readRest = 0, readArmed = true;
+  var _rc = new THREE.Vector3(), _rn = new THREE.Vector3();
+  var _rr = new THREE.Vector3(), _ru = new THREE.Vector3(), _rp = new THREE.Vector3();
+
+  function readAhead(vPos, vDir, dt) {
+    if (readRest > 0) readRest = Math.max(0, readRest - dt);
+    if (!score.on || !score.group || menu.open || movingRig || sizingRig ||
+        recentering || parking || bandCount() < 2) {
+      readHeld = 0; readArmed = true;
+      return false;
+    }
+
+    score.group.updateMatrixWorld(true);
+    _rc.copy(score.group.position);
+    _rn.set(0, 0, 1).applyQuaternion(score.group.quaternion);
+    _rr.set(1, 0, 0).applyQuaternion(score.group.quaternion);
+    _ru.set(0, 1, 0).applyQuaternion(score.group.quaternion);
+
+    var denom = _rn.dot(vDir);
+    if (Math.abs(denom) < 1e-4) { readHeld = 0; readArmed = true; return false; }
+    var t = _rn.dot(_rp.subVectors(_rc, vPos)) / denom;
+    if (t <= 0.05) { readHeld = 0; readArmed = true; return false; }
+    _rp.copy(vPos).addScaledVector(vDir, t).sub(_rc);
+
+    var u = _rp.dot(_rr) / (score.w / 2);      // -1 at the left edge, 1 at the right
+    var v = _rp.dot(_ru) / (score.h / 2);      // -1 at the bottom, 1 at the top
+    if (Math.abs(u) > 1 || Math.abs(v) > 1) { readHeld = 0; readArmed = true; return false; }
+
+    if (v > -1 + READ_ZONE * 2) { readHeld = 0; readArmed = true; return false; }
+
+    if (!readArmed || readRest > 0) {
+      readHeld = 0;
+      setReticle(0, 0xEFE9DF);
+      paintSlots(null, 0);
+      return true;
+    }
+
+    readHeld += dt;
+    setReticle(readHeld / READ_HOLD, 0xC9913F);
+    paintSlots(null, 0);
+    if (readHeld >= READ_HOLD) {
+      readHeld = 0;
+      readRest = READ_REST;
+      readArmed = false;
+      showBand(score.band + 1);
+      placeAll();
+      scheduleSave();
+    }
+    return true;
+  }
+
   function updateGaze(dt) {
     var inSpace = inScene;
     reticle.visible = inSpace;
@@ -1989,6 +2090,9 @@ function bootPracticeSpace() {
       gazeHit = null; gazeHeld = 0;
       return;
     }
+
+    // reading the bottom of the band is what turns it
+    if (readAhead(vPos, vDir, dt)) return;
 
     raycaster.set(vPos, vDir);
     var hits = raycaster.intersectObjects(pickables, false);
