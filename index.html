@@ -616,11 +616,21 @@ function bootPracticeSpace() {
   // the question is whether you can read music and a test card cannot answer
   // that: the thing that decides it is how small the beams and the ledger
   // lines get, and only real engraving has those in the right proportion.
-  // BOLD is the same engraving with its dark strokes grown a pixel outwards.
-  // A staff line one pixel wide at 300dpi arrives at under a pixel on a phone
-  // and turns grey, and grey is what stops being legible first. Set this to
-  // false to compare against the plain rendering.
-  var BOLD = true;
+  // HOW HEAVY THE ENGRAVING IS. The same notes with their dark strokes grown
+  // outwards by a pixel or three: a staff line one pixel wide at 300dpi arrives
+  // at under a pixel on a phone and turns grey, and grey is what stops being
+  // legible first.
+  //
+  // Judging this needs the glass rather than a desk, and waiting on a deploy
+  // between each one is no way to compare them, so it comes off the URL: add
+  // ?ink=plain, bold, bolder or boldest and reload. Those put 6.3, 9.9, 13.7
+  // and 16.9 percent ink on the page. Too far and the gaps between the staff
+  // lines start closing up, which costs more than the weight gains, so boldest
+  // is there to be rejected rather than assumed.
+  var INK = (function () {
+    var m = /[?&]ink=(plain|bold|bolder|boldest)/.exec(location.search);
+    return m ? m[1] : 'bolder';
+  })();
 
   // HOW MANY SYSTEMS AT A TIME. You reported two or three, which is what the
   // arithmetic said, and it is the number this is built around: a band of two
@@ -632,7 +642,8 @@ function bootPracticeSpace() {
   var BUILT_IN = {
     name: 'La fille aux cheveux de lin',
     pages: [1, 2, 3].map(function (n) {
-      return 'music/fille-aux-cheveux-de-lin-' + n + (BOLD ? '-bold' : '') + '.png';
+      return 'music/fille-aux-cheveux-de-lin-' + n +
+        (INK === 'plain' ? '' : '-' + INK) + '.png';
     }),
     systems: 'music/systems.json'
   };
@@ -3072,7 +3083,7 @@ function bootPracticeSpace() {
       if (--left > 0) return;
       setScorePages(imgs.filter(Boolean), 0);
       markScoreLoaded(BUILT_IN.name + (scoreSystems.length
-        ? ' \u2014 ' + scoreSystems.length + ' systems' : ''));
+        ? ' \u2014 ' + scoreSystems.length + ' systems, ' + INK : ''));
       placeAll();
       layoutMenu();
     }
