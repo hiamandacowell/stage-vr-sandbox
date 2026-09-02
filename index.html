@@ -288,6 +288,14 @@ function bootPracticeSpace() {
   // menu's handling of several all still work: raise this and they come back on
   // their own.
   var PANEL_MAX = 1;
+
+  // The keys window and the piano are hidden while the music is the subject.
+  // Nothing about them is deleted: the rigs are built, the code that moves and
+  // sizes them is untouched, and turning this back on puts them in the row
+  // where they were. A menu of eight tiles is 68 degrees wide, which is a lot
+  // of neck to reach the far end of when the question is whether you can read
+  // one page of music.
+  var SHOW_ROOM_RIGS = false;
   var panels = [];
 
   var raycaster = new THREE.Raycaster();
@@ -564,7 +572,7 @@ function bootPracticeSpace() {
   // IT SHOWS A PICTURE RATHER THAN THE CAMERA. Everything else in here that
   // looks like a window is one.
   var score = {
-    kind: 'panel', on: false, music: true, aspect: 0,
+    kind: 'panel', on: false, music: true, aspect: 0, page: 0, everShown: false,
     azim: RIG_YAW, elev: THREE.MathUtils.degToRad(-6), dist: 0.95,
     w: 0.80, h: 1.04,
     group: null, win: null, tex: null
@@ -604,6 +612,34 @@ function bootPracticeSpace() {
     return { tex: tex, aspect: w / h };
   }
 
+  // The pages that come with it. A real piece rather than a test card, because
+  // the question is whether you can read music and a test card cannot answer
+  // that: the thing that decides it is how small the beams and the ledger
+  // lines get, and only real engraving has those in the right proportion.
+  var BUILT_IN = {
+    name: 'La fille aux cheveux de lin',
+    pages: [
+      'music/fille-aux-cheveux-de-lin-1.png',
+      'music/fille-aux-cheveux-de-lin-2.png',
+      'music/fille-aux-cheveux-de-lin-3.png'
+    ]
+  };
+
+  var scorePages = [];      // loaded Images, in order
+
+  function setScorePages(imgs, startAt) {
+    scorePages = imgs;
+    score.page = Math.max(0, Math.min(imgs.length - 1, startAt || 0));
+    showScorePage(score.page);
+  }
+
+  function showScorePage(i) {
+    var img = scorePages[i];
+    if (!img) return;
+    score.page = i;
+    setScore(img);
+  }
+
   function setScore(img) {
     var made = textureFromImage(img);
     if (score.tex) score.tex.dispose();
@@ -621,7 +657,7 @@ function bootPracticeSpace() {
     // a page starts upright at whatever it actually is, rather than at the
     // shape the last one happened to be
     score.h = score.w / score.aspect;
-    score.on = true;
+    if (!score.everShown) { score.on = true; score.everShown = true; }
     placeAll();
     layoutMenu();
     scheduleSave();
@@ -845,6 +881,16 @@ function bootPracticeSpace() {
   }
 
   function placeAll() {
+    // hidden means hidden: out of the row and out of the room, and with
+    // nothing showing nothing asks for the camera either
+    if (!SHOW_ROOM_RIGS) {
+      piano.on = false;
+      if (piano.group) piano.group.visible = false;
+      for (var pi = 0; pi < panels.length; pi++) {
+        panels[pi].on = false;
+        panels[pi].group.visible = false;
+      }
+    }
     placePiano();
     if (score.group) {
       score.group.visible = score.on;
@@ -1052,6 +1098,12 @@ function bootPracticeSpace() {
       g.lineTo(34, 44);
       g.stroke();
       g.beginPath(); g.arc(18, 6, 5, 0, 6.284); g.fill();
+      return;
+    }
+    if (name === 'pageback' || name === 'pagenext') {
+      var d = (name === 'pagenext') ? 1 : -1;
+      g.strokeRect(-30 * d - 14 * d, -40, 44 * d, 80);
+      arrow(-6 * d, 0, 34 * d, 0);
       return;
     }
     if (name === 'music') {
@@ -1297,14 +1349,17 @@ function bootPracticeSpace() {
   // group. It is gone: you leave a room by its door now, and a menu entry that
   // does the same thing from anywhere is the weaker of the two ideas.
   function ringItems() {
-    var out = [{ id: 'sel:piano', icon: 'piano', label: 'piano', group: 0 }];
-    for (var i = 0; i < panels.length; i++) {
-      out.push({
-        id: 'sel:panel:' + i, icon: 'window', group: 0,
-        label: panels.length > 1 ? 'window ' + (i + 1) : 'window'
-      });
+    var out = [];
+    if (SHOW_ROOM_RIGS) {
+      out.push({ id: 'sel:piano', icon: 'piano', label: 'piano', group: 0 });
+      for (var i = 0; i < panels.length; i++) {
+        out.push({
+          id: 'sel:panel:' + i, icon: 'window', group: 0,
+          label: panels.length > 1 ? 'window ' + (i + 1) : 'window'
+        });
+      }
+      if (panels.length < PANEL_MAX) out.push({ id: 'addpanel', icon: 'addwindow', label: 'window', group: 0 });
     }
-    if (panels.length < PANEL_MAX) out.push({ id: 'addpanel', icon: 'addwindow', label: 'window', group: 0 });
     if (score.tex) out.push({ id: 'sel:score', icon: 'music', label: 'music', group: 0 });
     out.push({ id: 'recenter', icon: 'recenter', label: 'recenter', group: 0 });
     // The way out of this room, where this room's way out lives in the menu.
@@ -1347,11 +1402,23 @@ function bootPracticeSpace() {
       ];
     }
     if (ringId === 'sel:score') {
-      return [
+      var out2 = [
         { id: 'move:score', icon: 'move', label: 'move' },
         { id: 'size:score', icon: 'size', label: 'size' },
         { id: 'hide:score', icon: score.on ? 'hide' : 'show', label: score.on ? 'hide' : 'show' }
       ];
+      // Turning a page from the menu is the wrong place for it in the end: you
+      // would be opening the menu mid-piece, which is not a thing anyone can
+      // do with their hands on the keys. It is here because the question this
+      // build exists to answer is whether the notes are legible at all, and
+      // for that you only need to be able to reach all three pages.
+      if (scorePages.length > 1) {
+        out2.push({ id: 'pageback', icon: 'pageback',
+          label: 'page ' + (score.page > 0 ? score.page : scorePages.length) });
+        out2.push({ id: 'pagenext', icon: 'pagenext',
+          label: 'page ' + (score.page + 2 > scorePages.length ? 1 : score.page + 2) });
+      }
+      return out2;
     }
     var m = /^sel:panel:(\d+)$/.exec(ringId || '');
     if (m) {
@@ -1606,7 +1673,7 @@ function bootPracticeSpace() {
         menuFound: !!menuFound,
         menuPitch: menu.tabPitch,
         score: { on: !!score.on, azim: score.azim, elev: score.elev,
-                 dist: score.dist, w: score.w },
+                 dist: score.dist, w: score.w, page: score.page },
         stagePianoOn: stagePiano(),
         piano: {
           yaw: piano.yaw, drop: piano.drop, dist: piano.dist, width: piano.width
@@ -1673,6 +1740,8 @@ function bootPracticeSpace() {
       score.elev = num(s.score.elev, score.elev, -1.5, 1.5);
       score.dist = num(s.score.dist, score.dist, 0.35, 1.80);
       score.w    = num(s.score.w,    score.w,    0.25, 2.40);
+      score.page = num(s.score.page, 0, 0, 99);
+      score.everShown = true;
     }
     stagePianoOn = !!s.stagePianoOn;
 
@@ -2361,6 +2430,17 @@ function bootPracticeSpace() {
 
     // these carry no argument, so they have to be read before the guard below
     // that drops anything without one
+    if (id === 'pagenext' || id === 'pageback') {
+      if (scorePages.length > 1) {
+        var n2 = scorePages.length;
+        showScorePage(((score.page + (id === 'pagenext' ? 1 : -1)) % n2 + n2) % n2);
+        placeAll();
+        layoutMenu();
+        scheduleSave();
+      }
+      return;
+    }
+
     if (id === 'lower' || id === 'higher') {
       piano.drop = (id === 'lower')
         ? Math.min(1.10, piano.drop + step * DROP_RATE)
@@ -2910,22 +2990,47 @@ function bootPracticeSpace() {
     errEl.textContent = '';
     imageFromBlob(f, function (img) {
       if (!img) { markScoreLoaded(null); return; }
-      setScore(img);
+      setScorePages([img], 0);
       saveScoreFile(f);
       markScoreLoaded(f.name);
+      placeAll();
+      layoutMenu();
     });
   };
 
-  // put the last one back, so going in and out to judge a size does not mean
-  // finding the file again every time
+  function loadBuiltIn() {
+    var imgs = [], left = BUILT_IN.pages.length;
+    BUILT_IN.pages.forEach(function (src, i) {
+      var im = new Image();
+      im.onload = function () {
+        imgs[i] = im;
+        if (--left === 0) {
+          setScorePages(imgs, score.page || 0);
+          markScoreLoaded(BUILT_IN.name);
+          placeAll();
+          layoutMenu();
+        }
+      };
+      im.onerror = function () {
+        if (--left === 0 && imgs.length) {
+          setScorePages(imgs.filter(Boolean), 0);
+          placeAll(); layoutMenu();
+        }
+      };
+      // all three up front, so turning a page is instant rather than a wait
+      // with a viewer on your face
+      im.src = src;
+    });
+  }
+
+  // Your own file wins if there is one; otherwise the piece that ships with it,
+  // so that going in for the first time already has music in front of you.
   loadScoreFile(function (blob) {
-    if (!blob) return;
+    if (!blob) { loadBuiltIn(); return; }
     imageFromBlob(blob, function (img) {
-      if (!img) return;
-      var wasOn = score.on;
-      setScore(img);
-      score.on = wasOn || score.on;
-      markScoreLoaded(blob.name || 'saved page');
+      if (!img) { loadBuiltIn(); return; }
+      setScorePages([img], 0);
+      markScoreLoaded(blob.name || 'your page');
       placeAll();
       layoutMenu();
     });
