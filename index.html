@@ -1,0 +1,2807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Stage VR LAB</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --ink:#0B0C0E;
+    --surface:#15171A;
+    --surface-2:#1D2025;
+    --line:#2A2E34;
+    --text:#F1F3F5;
+    --muted:#99A0A9;
+    --brass:#C9913F;
+    --brass-dim:#8A6329;
+    --warn:#E0A6A6;
+    --display:"Fraunces", Georgia, "Times New Roman", serif;
+    --ui:"Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box;}
+  html{min-height:100%;}
+  body{
+    margin:0;padding:0;min-height:100vh;min-height:100dvh;
+    background:var(--ink);
+    color:var(--text);
+    font-family:var(--ui);
+    -webkit-font-smoothing:antialiased;
+  }
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:0;}
+
+  #ui{
+    position:relative; z-index:2; min-height:100vh; min-height:100dvh;
+    padding:34px 20px 56px;
+    background:
+      radial-gradient(120% 70% at 50% -8%, rgba(201,145,63,0.11) 0%, rgba(11,12,14,0) 60%),
+      var(--ink);
+  }
+  .wrap{max-width:460px;margin:0 auto;}
+
+  h1{
+    font-family:var(--display);
+    font-weight:600; font-size:34px; line-height:1.08; letter-spacing:-0.015em;
+    margin:0 0 14px; text-wrap:balance;
+  }
+  .rule{height:1px;background:linear-gradient(90deg,var(--brass),rgba(201,145,63,0));margin:0 0 18px;}
+  .sub{font-size:14.5px;line-height:1.6;color:var(--muted);margin:0 0 26px;}
+  .sub b{color:var(--text);font-weight:500;}
+
+  /* the select still drives loadSky and what gets saved; the tiles set it */
+  #env{display:none;}
+
+  .pick{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 28px;}
+  .tile{
+    position:relative;padding:0;border:1px solid var(--line);border-radius:12px;
+    background:var(--surface);overflow:hidden;cursor:pointer;text-align:left;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .tile .shot{
+    display:block;height:104px;background-size:cover;background-position:center;
+    filter:saturate(.85) brightness(.8);
+  }
+  .tile[data-env="img-stage"] .shot{background-image:url(hill-stage.jpg);background-position:48% 58%;}
+  .tile[data-env="img-green"] .shot{background-image:url(hill-greenroom.jpg);background-position:75% 55%;}
+  .tile .cap{
+    display:block;padding:11px 12px 12px;font-size:14.5px;font-weight:500;color:var(--text);
+  }
+  .tile[aria-pressed="true"]{border-color:var(--brass);}
+  .tile[aria-pressed="true"] .shot{filter:none;}
+  .tile[aria-pressed="true"]::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--brass);
+  }
+
+  details{margin:2px 0 6px;}
+  details summary{
+    font-size:12.5px;color:var(--brass);cursor:pointer;padding:6px 2px;list-style:none;
+  }
+  details summary::-webkit-details-marker{display:none;}
+  details summary::before{content:"+ ";font-weight:600;}
+  details[open] summary::before{content:"- ";}
+  details p{font-size:12.8px;line-height:1.6;color:var(--muted);margin:2px 2px 10px;}
+  details p b{color:var(--text);font-weight:600;}
+
+  button{font-family:var(--ui);}
+  button.go{
+    width:100%;padding:16px;font-size:16px;font-weight:600;letter-spacing:.01em;
+    border:0;border-radius:10px;background:var(--text);color:#0B0C0E;cursor:pointer;
+  }
+  button.go:hover{background:#fff;}
+  button.ghost{
+    width:100%;padding:15px;font-size:16px;border:1px solid var(--line);border-radius:10px;
+    background:transparent;color:var(--muted);cursor:pointer;margin-top:10px;
+  }
+  /* a way in says what it is on the first line and what you need on the second,
+     because the name of a thing and the thing you are holding are two questions
+     and both of them get asked */
+  button.go b, button.ghost b{display:block;font-weight:600;}
+  button.go span, button.ghost span{
+    display:block;margin-top:4px;font-size:13px;font-weight:400;letter-spacing:0;
+  }
+  button.go span{color:#4A4E55;}
+  button.ghost span{color:#6B7280;}
+  button.ghost:hover{color:var(--text);border-color:var(--muted);}
+  :focus-visible{outline:2px solid var(--brass);outline-offset:2px;}
+
+  .note{font-size:12.8px;color:var(--muted);line-height:1.6;margin:16px 0 0;}
+  ul.note{margin:20px 0 0;padding:0;list-style:none;}
+  ul.note li{position:relative;padding:0 0 0 16px;margin:0 0 7px;}
+  ul.note li::before{
+    content:"";position:absolute;left:0;top:8px;width:5px;height:5px;
+    border-radius:50%;background:var(--brass);
+  }
+  .note b{color:var(--text);font-weight:600;}
+  /* This used to live inside the start screen, which is hidden the moment you
+     go in, so everything it had to say about why something was not working was
+     written where nobody could read it. It sits over the scene now, and takes
+     no room at all until it has something to say. */
+  #err{
+    color:var(--warn);font-size:12.8px;line-height:1.6;
+    position:fixed;left:0;right:0;top:0;z-index:5;
+    margin:0;padding:10px 16px;text-align:center;
+    background:rgba(14,13,12,0.82);
+    pointer-events:none;
+  }
+  #err:empty{display:none;}
+
+  #gate{
+    position:relative; z-index:3; min-height:100vh; min-height:100dvh;
+    padding:34px 20px 56px; display:flex; align-items:center; justify-content:center;
+  }
+  #gate .wrap{width:100%;}
+  #gate input{
+    width:100%; padding:15px; margin:0 0 10px; font-family:var(--ui); font-size:18px;
+    letter-spacing:.14em; text-align:center; color:var(--text);
+    background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+  }
+  #hud{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:4;display:none;gap:8px;}
+  #hud button{
+    padding:9px 15px;font-size:12.5px;border-radius:999px;border:1px solid rgba(239,233,223,.22);
+    background:rgba(14,13,12,.62);color:var(--text);backdrop-filter:blur(8px);cursor:pointer;
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+</style>
+</head>
+<body>
+
+
+<div id="gate"><div class="wrap">
+  <h1>Stage VR LAB</h1>
+  <div class="rule"></div>
+  <p class="sub">Not a public page. Enter the password to go in.</p>
+  <form id="gateForm" autocomplete="off">
+    <input id="pin" type="password" autocapitalize="none" autocorrect="off" spellcheck="false"
+           placeholder="password" aria-label="Password">
+    <button class="go" type="submit">Unlock</button>
+  </form>
+  <p class="note" id="gateErr" role="status"></p>
+</div></div>
+
+<div id="ui" style="display:none"><div class="wrap">
+  <h1>Stage VR LAB</h1>
+  <div class="rule"></div>
+
+  <p class="pick">Where do you want to start?</p>
+  <!-- green room on the left, stage on the right, which is the order you do
+       them in: you wait to go on, then you go on. Which one is selected still
+       comes from the script, so the order here is only the order you read. -->
+  <div class="tiles">
+    <button class="tile" type="button" data-env="img-green" aria-pressed="false">
+      <span class="shot"></span><span class="cap">Green room</span>
+    </button>
+    <button class="tile" type="button" data-env="img-stage" aria-pressed="true">
+      <span class="shot"></span><span class="cap">On stage</span>
+    </button>
+  </div>
+
+  <select id="env" aria-label="Environment">
+    <option value="img-stage">On stage</option>
+    <option value="img-green">Green room</option>
+  </select>
+
+  <!-- Named for what you physically do, because that is the only thing that
+       does not change by device. immersive-vr is not one experience: a phone
+       hands it to Cardboard and a headset makes it a headset session. Both of
+       those are putting it on your face, so both are one button, and the device
+       answers the rest without anyone having to detect anything. -->
+  <button class="go" id="enter">
+    <b>Wear it</b><span>A VR headset or a Cardboard viewer with phone</span>
+  </button>
+  <button class="ghost" id="use360">
+    <b>Hold up your phone/tablet</b><span>Move device around to look</span>
+  </button>
+  <button class="ghost" id="peek">
+    <b>Browser</b><span>A laptop, drag with the mouse to look around</span>
+  </button>
+  <button class="ghost" id="forget">Forget my setup and start fresh</button>
+
+  <p class="note" id="modeNote"></p>
+</div></div>
+<p id="err" role="status"></p>
+
+<div style="display:none" aria-hidden="true">
+  <img id="img-stage" alt="" src="hill-stage.jpg">
+  <img id="img-green" alt="" src="hill-greenroom.jpg">
+</div>
+
+<div id="hud">
+  <button id="exit">Exit</button>
+  <button id="recenter">Recenter</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+function bootPracticeSpace() {
+  'use strict';
+  if (typeof THREE === 'undefined') {
+    var e0 = document.getElementById('err');
+    if (e0) e0.textContent = 'The 3D library did not load, so only this screen works. Open the page directly rather than inside a preview frame.';
+    return;
+  }
+
+  var ui = document.getElementById('ui');
+  var hud = document.getElementById('hud');
+  var errEl = document.getElementById('err');
+
+  var renderer, scene, camera, sky, skyTex, videoEl, videoTex;
+  var reticle, reticleRing, hintPlate = null, menuTip = null;
+  // the pointer to the tab retires for good once you have opened the menu once
+  var menuFound = false;
+  var pickables = [];
+  var mode = 'flat';
+  var inScene = false;
+  var orient = null;
+  var dragging = false, dragX = 0, dragY = 0, yaw = 0, pitch = 0, yawOffset = 0;
+
+  // Whether looking around is done by dragging rather than by moving the thing
+  // you are holding. That is the browser always, and it is any of the others
+  // that turned out to have no head tracking to run on.
+  //
+  // Choosing the viewer and being handed one flat picture is the wrong answer:
+  // the two eyes are the thing you asked for, and they are drawn whether or not
+  // anything is reporting which way you are pointed. It also fixes itself the
+  // moment a reading does arrive, so a device that is merely slow to start
+  // reporting is not left on the drag for the rest of the session.
+  function dragLook() {
+    return mode === 'flat' || ((mode === 'stereo' || mode === 'window') && !orient);
+  }
+
+  var EYE = 1.15;
+
+  // two independent windows on the real room, both fed by the one rear camera.
+  // the music window hangs in front of your face; the piano lies flat where the
+  // real keybed is, so its body can be built around it in the right orientation.
+  // Both rigs start a little to the left of where you are facing, so the default
+  // view is you angled out towards the house rather than square to your own
+  // keys, which is how you actually sit at the instrument on a stage. One number
+  // moves the piano and the music window together; they belong to each other.
+  var RIG_YAW = THREE.MathUtils.degToRad(-10);
+
+  var piano = {
+    kind: 'deck', on: true,
+    yaw: RIG_YAW, drop: 0.46, dist: 0.44, width: 1.0,
+    group: null, win: null, fallback: null
+  };
+
+  // Music windows are a list rather than one fixed panel, and width and height
+  // move independently, which covers square, letterbox and portrait without
+  // needing preset shapes.
+  //
+  // One window is what ships. The list, the add and remove entries and the
+  // menu's handling of several all still work: raise this and they come back on
+  // their own.
+  var PANEL_MAX = 1;
+  var panels = [];
+
+  var raycaster = new THREE.Raycaster();
+  var gazeHit = null, gazeHeld = 0, movingRig = null, sizingRig = null, grabbedEdge = null,
+      recentering = false, parking = false, lastT = 0;
+  var steady = 0, lastDir = new THREE.Vector3(), swingAvg = 0, moveAge = 0;
+  var pendingRecenter = false;
+  // where you were looking when a hold was armed, and how far off that you must
+  // get before a recenter will commit. without it, picking recenter and then
+  // simply not moving would set front to the menu you were staring at.
+  var armDir = new THREE.Vector3();
+  // How far you must have looked away from the tile you picked before holding
+  // still can commit. It is only there so that the gaze which picked the tile
+  // cannot immediately commit on the same spot; being off the tile is the whole
+  // requirement, and a tile crosses about 7 degrees.
+  //
+  // It was 15, which is more than the distance from the recenter tile to
+  // straight ahead. Recentring to roughly where you are already facing is the
+  // ordinary case, and it could never complete: the ring sat at nothing and
+  // held there. With the menu parked low it was impossible at any bearing.
+  var MIN_TURN = 6;
+  // Letting go of an edge is not the same act as putting a whole rig down. You
+  // took the edge in order to move it, so releasing before you have moved it is
+  // never what you meant — and the release could fire on the stillness you were
+  // already in from staring at the handle to take it, which gave you one short
+  // window to move the edge and then let go wherever it had got to. It now
+  // wants you to have moved it at all, and then a longer settle than a drop, so
+  // that stopping to judge the size is not the same as agreeing to it.
+  var EDGE_TURN = 6, EDGE_DWELL = 1.4;
+  // seconds of gaze to ignore after something fires. without it the stare that
+  // chose a menu item carries straight on into whatever replaces it.
+  var cooldown = 0, COOLDOWN = 0.7, mustLeave = null;
+  // nothing in the scene except the menu answers to your gaze. you can stare at
+  // your own keys through the piano window for as long as you like.
+  var DWELL = 0.85, REPEAT_DELAY = 0.28, PLACE_DWELL = 0.9;
+  // How still "still" has to be, in degrees per second. A phone's orientation
+  // stream jitters by a fraction of a degree between frames even on a head that
+  // is not moving, and at 60fps a tenth of a degree already reads as 6 deg/sec,
+  // so a tight limit measures noise rather than you. Turning to look at
+  // something runs into the hundreds, so this still tells the two apart.
+  var STEADY_LIMIT = 25;
+  var SWING_SMOOTH = 0.12;   // seconds of smoothing on the speed estimate
+  var STEADY_DECAY = 2;      // a wobble costs progress at this rate, never all of it
+  var MIN_MOVE = 0.6;        // seconds before a placement can complete at all
+  // width units per second while you hold a gaze on smaller or bigger. the whole
+  // range is 0.4 to 2.4, so this crosses it in eight seconds; at 0.8 it crossed
+  // in under three and you could not stop where you meant to.
+  var SIZE_RATE = 0.25;
+  // metres per second of height while you hold a gaze on lower or higher. A
+  // gaze is a direction and carries no distance, so how far below your eyes the
+  // keys sit is the one thing looking at them cannot say: it needs its own
+  // control, and two buttons are honestly the right tool for it.
+  var DROP_RATE = 0.22;
+  var tmpQ = new THREE.Quaternion(), vDir = new THREE.Vector3(), vPos = new THREE.Vector3();
+
+  function init() {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    // local puts the origin where your head was when the session opened.
+    // local-floor puts it on the floor, which means the app has to know how
+    // tall you are to place anything at eye level, and it does not. See head().
+    renderer.xr.setReferenceSpaceType('local');
+    document.body.appendChild(renderer.domElement);
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 1000);
+    camera.position.set(0, EYE, 0);
+    scene.add(camera);
+
+    var geo = new THREE.SphereGeometry(60, 64, 40);
+    geo.scale(-1, 1, 1);
+    sky = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x14110f }));
+    scene.add(sky);
+
+    // the panorama is unlit basic material; these lights exist only so the
+    // piano body has some shape to it instead of reading as a black silhouette
+    scene.add(new THREE.AmbientLight(0xffffff, 0.30));
+    var key = new THREE.DirectionalLight(0xFFE6C2, 1.15);
+    key.position.set(-1.4, 2.0, 0.5);
+    scene.add(key);
+    var fill = new THREE.DirectionalLight(0x9FB6D4, 0.45);
+    fill.position.set(1.2, 0.7, -0.8);
+    scene.add(fill);
+    // a hard light almost overhead is what puts the long streak down a polished lid
+    var sheen = new THREE.DirectionalLight(0xFFF4E2, 0.7);
+    sheen.position.set(0.4, 3.0, -2.0);
+    scene.add(sheen);
+
+    buildPianoRig();
+    buildMenu();
+    buildReticle();
+    placeAll();
+
+    window.addEventListener('resize', onResize);
+    renderer.setAnimationLoop(render);
+  }
+
+  // ---------- geometry helpers ----------
+
+  // Both windows are holes in the panorama showing whatever the rear camera can
+  // actually see behind them. Rather than crop the frame, each fragment is
+  // projected back through a virtual camera sitting at your head and pointed
+  // where you are pointed, which is where the phone's lens really is. Wherever
+  // that projection lands outside the frame, the window is black, because the
+  // camera genuinely cannot see there.
+  //
+  // Both meshes share one material, so the projection is computed once a frame.
+  var PHONE_FOV_H = 65;   // degrees across, about what a phone rear camera gives back
+  var winMat = null;
+  var phoneCam = new THREE.PerspectiveCamera();
+
+  function windowMaterial() {
+    if (winMat) return winMat;
+    winMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uVideo:    { value: null },
+        uHasVideo: { value: 0 },
+        uCamProj:  { value: new THREE.Matrix4() }
+      },
+      vertexShader: [
+        'uniform mat4 uCamProj;',
+        'varying vec4 vProj;',
+        'void main() {',
+        '  vec4 wp = modelMatrix * vec4(position, 1.0);',
+        '  vProj = uCamProj * wp;',
+        '  gl_Position = projectionMatrix * viewMatrix * wp;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform sampler2D uVideo;',
+        'uniform float uHasVideo;',
+        'varying vec4 vProj;',
+        'void main() {',
+        '  if (uHasVideo < 0.5 || vProj.w <= 0.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }',
+        // the divide happens per fragment, so the mapping stays correct on a
+        // plane lying flat under you as well as one square to your face
+        '  vec2 uv = (vProj.xy / vProj.w) * 0.5 + 0.5;',
+        '  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {',
+        '    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return;',
+        '  }',
+        '  gl_FragColor = vec4(texture2D(uVideo, uv).rgb, 1.0);',
+        '}'
+      ].join('\n')
+    });
+    return winMat;
+  }
+
+  // the lens rides on your head, so the virtual camera takes the head pose. in
+  // stereo both eyes get the same projection, which is honest: there is one lens.
+  function updateWindowProjection() {
+    if (!winMat) return;
+    var vc = viewCamera();
+    vc.updateMatrixWorld();
+    phoneCam.position.setFromMatrixPosition(vc.matrixWorld);
+    vc.getWorldQuaternion(phoneCam.quaternion);
+
+    var aspect = (videoEl && videoEl.videoWidth && videoEl.videoHeight)
+      ? videoEl.videoWidth / videoEl.videoHeight : 4 / 3;
+    // phone cameras are quoted across; three wants the vertical angle
+    phoneCam.fov = 2 * THREE.MathUtils.radToDeg(
+      Math.atan(Math.tan(THREE.MathUtils.degToRad(PHONE_FOV_H) / 2) / aspect)
+    );
+    phoneCam.aspect = aspect;
+    phoneCam.near = 0.05;
+    phoneCam.far = 100;
+    phoneCam.updateProjectionMatrix();
+    phoneCam.updateMatrixWorld(true);
+
+    winMat.uniforms.uCamProj.value.multiplyMatrices(
+      phoneCam.projectionMatrix, phoneCam.matrixWorldInverse
+    );
+  }
+
+  // a drawn keybed, sitting in the piano window until the camera hands over a
+  // picture, and left there if it never does. it is a placeholder, not your keys.
+  function keybedTexture() {
+    var c = document.createElement('canvas');
+    c.width = 1024; c.height = 300;
+    var g = c.getContext('2d');
+    g.fillStyle = '#08080A'; g.fillRect(0, 0, 1024, 300);
+
+    var n = 36, w = 1024 / n, i;
+    for (i = 0; i < n; i++) {
+      var grd = g.createLinearGradient(0, 44, 0, 300);
+      grd.addColorStop(0, '#7C786F');
+      grd.addColorStop(0.35, '#B4AEA3');
+      grd.addColorStop(1, '#DAD5CA');
+      g.fillStyle = grd;
+      g.fillRect(i * w + 1.6, 44, w - 3.2, 254);
+    }
+
+    var pattern = [0, 1, 3, 4, 5];
+    for (var oct = 0; oct < 6; oct++) {
+      for (var p = 0; p < pattern.length; p++) {
+        var idx = oct * 7 + pattern[p];
+        if (idx >= n - 1) continue;
+        var bg = g.createLinearGradient(0, 44, 0, 212);
+        bg.addColorStop(0, '#04050A');
+        bg.addColorStop(1, '#20242F');
+        g.fillStyle = bg;
+        g.fillRect((idx + 1) * w - w * 0.29, 44, w * 0.58, 168);
+      }
+    }
+
+    // the shadow the fallboard throws over the back of the keys
+    var sh = g.createLinearGradient(0, 44, 0, 118);
+    sh.addColorStop(0, 'rgba(0,0,0,0.78)');
+    sh.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = sh; g.fillRect(0, 44, 1024, 74);
+
+    var t = new THREE.CanvasTexture(c);
+    t.minFilter = THREE.LinearFilter;
+    return t;
+  }
+
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+
+  function labelTexture(text, accent) {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 128;
+    var g = c.getContext('2d');
+    // brass is the dwell ring's colour and means "you are selecting this", so the
+    // tag is deliberately not brass: pale, like a physical tag, and readable
+    // against a dark ceiling without pretending to be a progress indicator
+    g.fillStyle = accent ? 'rgba(239,233,223,0.95)' : 'rgba(14,13,12,0.82)';
+    roundRect(g, 5, 5, 246, 118, 24); g.fill();
+    g.strokeStyle = accent ? 'rgba(48,41,37,0.85)' : 'rgba(201,145,63,0.55)';
+    g.lineWidth = accent ? 5 : 3;
+    roundRect(g, 5, 5, 246, 118, 24); g.stroke();
+    g.fillStyle = accent ? '#191614' : '#EFE9DF';
+    // shrink to fit rather than run off the plate: "hold still to place" and
+    // "music window" are both wider than the label at the nominal size
+    var size = 40;
+    g.font = '600 ' + size + 'px system-ui, sans-serif';
+    while (size > 17 && g.measureText(text).width > 212) {
+      size -= 2;
+      g.font = '600 ' + size + 'px system-ui, sans-serif';
+    }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, 128, 66);
+    return new THREE.CanvasTexture(c);
+  }
+
+  // ---------- the two rigs ----------
+
+  // a unit plane, scaled per panel. round windows were tried and pulled; the
+  // shader ignores uvs, so bringing another shape back is only a geometry swap.
+  function panelGeometry() {
+    return new THREE.PlaneGeometry(1, 1);
+  }
+
+  function makePanel(init) {
+    var p = {
+      kind: 'panel', on: true,
+      azim: RIG_YAW, elev: THREE.MathUtils.degToRad(-14), dist: 1.05,
+      w: 1.05, h: 0.59,
+      group: null, win: null
+    };
+    if (init) {
+      for (var k in init) if (Object.prototype.hasOwnProperty.call(p, k)) p[k] = init[k];
+    }
+    p.group = new THREE.Group();
+    p.win = new THREE.Mesh(panelGeometry(), windowMaterial());
+    p.group.add(p.win);
+    p.group.visible = p.on;
+    scene.add(p.group);
+    return p;
+  }
+
+  function removePanel(i) {
+    var p = panels[i];
+    if (!p) return;
+    scene.remove(p.group);
+    p.win.geometry.dispose();
+    panels.splice(i, 1);
+    if (movingRig === p) { movingRig = null; hintPlate.visible = false; }
+    if (sizingRig === p) { sizingRig = null; grabbedEdge = null; hintPlate.visible = false; }
+  }
+
+  // a new window lands beside the ones already out rather than on top of them
+  function addPanel() {
+    if (panels.length >= PANEL_MAX) return null;
+    var p = makePanel({ azim: RIG_YAW + THREE.MathUtils.degToRad(30 * panels.length) });
+    panels.push(p);
+    startPassthrough();
+    placeAll();
+    return p;
+  }
+
+  function buildPianoRig() {
+    var r = piano;
+    var g = new THREE.Group();
+    // polished ebony is nearly black but it is never flat black; the highlight is
+    // the whole reason it reads as a solid object and not a hole in the panorama
+    var ebony = new THREE.MeshStandardMaterial({ color: 0x0D0C0B, roughness: 0.22, metalness: 0.10 });
+    var ebonyMatte = new THREE.MeshStandardMaterial({ color: 0x0A0908, roughness: 0.62, metalness: 0.04 });
+    var brass = new THREE.MeshStandardMaterial({ color: 0x5A4420, roughness: 0.68, metalness: 0.45 });
+    var felt = new THREE.MeshStandardMaterial({ color: 0x5A1F24, roughness: 0.95 });
+
+    // the window on your real keys, lying flat where the keybed is, so you look
+    // down into it rather than at it
+    r.win = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 0.30), windowMaterial());
+    r.win.rotation.x = -Math.PI / 2;
+    r.win.position.y = 0.001;
+    r.win.visible = false;
+    g.add(r.win);
+
+    // same footprint, untouched UVs, showing the drawn keybed until video arrives
+    r.fallback = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.06, 0.30),
+      new THREE.MeshBasicMaterial({ map: keybedTexture() })
+    );
+    r.fallback.rotation.x = -Math.PI / 2;
+    g.add(r.fallback);
+
+    // key slip along the front edge, the bit nearest your stomach. matte, because
+    // a polished upward face this close to the eye blows out into a headlamp
+    var slip = new THREE.Mesh(new THREE.BoxGeometry(1.20, 0.030, 0.055), ebonyMatte);
+    slip.position.set(0, 0.008, 0.178);
+    g.add(slip);
+
+    // a thin edge on the slip, so the near lip of the piano has a line
+    var edge = new THREE.Mesh(new THREE.BoxGeometry(1.20, 0.004, 0.008), brass);
+    edge.position.set(0, 0.024, 0.205);
+    g.add(edge);
+
+    // cheek blocks either side of the keys
+    [-1, 1].forEach(function (s) {
+      var cheek = new THREE.Mesh(new THREE.BoxGeometry(0.070, 0.072, 0.360), ebony);
+      cheek.position.set(s * 0.565, 0.030, 0.005);
+      g.add(cheek);
+    });
+
+    // fallboard tipped back off the keys, then the music desk above it
+    var fall = new THREE.Mesh(new THREE.BoxGeometry(1.20, 0.185, 0.026), ebony);
+    fall.position.set(0, 0.082, -0.172);
+    fall.rotation.x = -0.22;
+    g.add(fall);
+
+    var lip = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.022, 0.032), ebony);
+    lip.position.set(0, 0.112, -0.228);
+    g.add(lip);
+
+    var desk = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.300, 0.018), ebonyMatte);
+    desk.position.set(0, 0.248, -0.270);
+    desk.rotation.x = -0.30;
+    g.add(desk);
+
+    // the rim running away from you, with the strip of felt you catch under the lid
+    var rim = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.090, 1.05), ebony);
+    rim.position.set(0, 0.150, -0.860);
+    g.add(rim);
+
+    var strip = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.006, 0.160), felt);
+    strip.position.set(0, 0.198, -0.402);
+    g.add(strip);
+
+    g.visible = false;
+    r.group = g;
+    scene.add(g);
+  }
+
+  // when the camera arrives after the rigs are already built, hand it to both windows
+  function attachVideo() {
+    winMat.uniforms.uVideo.value = videoTex;
+    winMat.uniforms.uHasVideo.value = 1;
+    if (piano.win) piano.win.visible = true;
+    if (piano.fallback) piano.fallback.visible = false;
+    for (var i = 0; i < panels.length; i++) panels[i].win.visible = true;
+  }
+
+  // ---------- placement ----------
+
+  // Where your eyes actually are. Everything in here is placed by angle on a
+  // sphere around this point: the menu, the doors, the piano, the windows.
+  //
+  // On a screen or a phone held up, the camera is put at eye height above the
+  // origin and a constant was right. In a real headset session it was not. The
+  // headset owns the pose, local-floor puts the origin on the floor with your
+  // eyes about 1.6 metres above it, and everything stayed hung around a point
+  // 45 centimetres below them. On a reach of 0.85 metres that is not a small
+  // error: ask for the menu 32 degrees above your eyeline and it arrived on
+  // your eyeline, and the whole 15-to-45 band you can park it in squashed into
+  // -16 to +14. It is also why the room read as the wrong size and the stage
+  // felt like it was somewhere under your feet.
+  //
+  // The session asks for local rather than local-floor now, which puts the
+  // origin at your head instead of on the floor. So in a session the head is
+  // the origin, and every angle is measured from where you actually are.
+  function head() {
+    return new THREE.Vector3(0, mode === 'xr' ? 0 : EYE, 0);
+  }
+
+  function placePanel(r) {
+    var d = new THREE.Vector3(
+      Math.cos(r.elev) * Math.sin(r.azim),
+      Math.sin(r.elev),
+      -Math.cos(r.elev) * Math.cos(r.azim)
+    );
+    var h = head();
+    r.group.position.copy(h.clone().addScaledVector(d, r.dist));
+    r.group.scale.set(r.w, r.h, 1);
+    r.group.lookAt(h);
+  }
+
+  function placePiano() {
+    var r = piano;
+    var p = new THREE.Vector3(
+      Math.sin(r.yaw) * r.dist,
+      head().y - r.drop,
+      -Math.cos(r.yaw) * r.dist
+    );
+    r.group.position.copy(p);
+    // Turn the piano to keep the keys towards you wherever you drag it, so it
+    // swings around you rather than spinning on the spot. The group's local +Z
+    // is the player's side, and the way back to your head from a point at
+    // azimuth yaw is (-sin yaw, cos yaw), which Ry reaches at -yaw. Using +yaw
+    // turned it away at twice the drag angle instead.
+    r.group.rotation.y = -r.yaw;
+    r.group.scale.setScalar(r.width);
+  }
+
+  function placeAll() {
+    placePiano();
+    for (var i = 0; i < panels.length; i++) {
+      panels[i].group.visible = panels[i].on;
+      placePanel(panels[i]);
+    }
+  }
+
+  function placeRig(r) {
+    if (r.kind === 'deck') placePiano(); else placePanel(r);
+  }
+
+  function refreshPickables() {
+    pickables = [];
+    if (menu.tab.visible) pickables.push(menu.tab);
+    for (var i = 0; i < menu.ring.length; i++) {
+      if (menu.ring[i].visible) pickables.push(menu.ring[i]);
+    }
+    for (var j = 0; j < menu.bloom.length; j++) {
+      if (menu.bloom[j].visible) pickables.push(menu.bloom[j]);
+    }
+    for (var q = 0; q < menu.handles.length; q++) {
+      if (menu.handles[q].visible) pickables.push(menu.handles[q]);
+    }
+    // last, and further off than any of the menu: where they overlap, the
+    // nearer hit wins and the menu is always the nearer one
+    if (doorMark && doorMark.visible) pickables.push(doorMark);
+  }
+
+  // ---------- the way out ----------
+
+  // You leave a room by its door. Both panoramas have one, so the way between
+  // them is the thing in the room rather than an entry in a list.
+  //
+  // Measured off the same forward as ENV_FORWARD: azim runs round from dead
+  // ahead, positive to your right, elev up from eye level. On the stage that is
+  // the open doorway at stage right, where the grey wall meets the panelling,
+  // 95 degrees round. It is a long way off across the stage, so the opening is
+  // only about 4 degrees across against the marker's 7: it covers the doorway
+  // and a little of the jamb either side, which reads as a plate on the door
+  // rather than a thing hanging near it. The pair of closed doors further round
+  // at 122 was the first reading of "the door behind you" and the wrong one.
+  //
+  // In the green room it is the propped-open door to the corridor, and the
+  // marker sits in the opening itself against the brick across the hall, not on
+  // the leaf, because the leaf is standing open.
+  //
+  // The stage one cannot be reached without deliberately turning, which is what
+  // makes it safe to leave a live button hanging in a room with nothing
+  // guarding it: 95 degrees is square to your side. The green room's is
+  // straight in front of you instead, so it earns its safety the other way: 12
+  // degrees down, with the menu tag 25 up, and the reticle arriving on the
+  // brick in the gap between them. That opening runs from 23 above to 28 below,
+  // so both are inside the doorway and neither is anywhere your eyes rest.
+  //
+  // viaMenu means the way out of that room is a tile in the menu rather than a
+  // marker on the door itself. The stage one is 95 degrees round, which is what
+  // made it safe to leave hanging in a room with nothing guarding it, and is
+  // also a long way to turn every time you want to leave. In the menu it is
+  // three tiles from where you are already looking. Its azimuth is kept because
+  // it is still where the door is; nothing draws it any more.
+  //
+  // The green room keeps its marker. It is straight ahead in the propped-open
+  // doorway, under the menu tag on the head of the same frame, and everything
+  // that room can do reads in one glance. There is nothing to fix there.
+  var DOORS = {
+    'img-stage': { azim: 95, elev: -3, label: 'green room', viaMenu: true },
+    'img-green': { azim: 0, elev: -12, label: 'stage' }
+  };
+  // far enough out to read as hung on the wall rather than held in front of
+  // your face, and sized from that to cross the same 7 degrees as a menu tile
+  var DOOR_REACH = 2.45;
+  var DOOR_TILE = 0.30;
+  // a whole room on the 0.85s that hides a window is something that would
+  // happen to you. This one wants to be meant.
+  var DOOR_DWELL = 1.6;
+  var doorMark = null;
+
+  function layoutDoor() {
+    if (!doorMark) return;
+    var d = DOORS[currentEnv];
+    // while you are placing or sizing something, the room is not the subject
+    doorMark.visible = !!(d && !d.viaMenu && inScene && !movingRig && !sizingRig && !recentering && !parking);
+    if (!doorMark.visible) return;
+    doorMark.userData.id = 'door';
+    doorMark.userData.repeat = false;
+    doorMark.material.map = cachedIcon('room', d.label);
+    doorMark.material.needsUpdate = true;
+    doorMark.scale.setScalar(1);
+    aimAt(doorMark,
+      THREE.MathUtils.degToRad(d.azim),
+      THREE.MathUtils.degToRad(d.elev),
+      DOOR_REACH);
+  }
+
+  function switchRoom() {
+    var el = document.getElementById('env');
+    el.value = (el.value === 'img-stage') ? 'img-green' : 'img-stage';
+    goToRoom(el.value);
+    // You went through a door, so you are facing into the room you came out
+    // in. Carrying your compass heading across a teleport is the stranger of
+    // the two, and it left you looking at a side wall with both of that room's
+    // buttons behind your shoulder. This is the recenter the menu offers,
+    // taken for you, because arriving is exactly when you would ask for it.
+    doRecenter();
+  }
+
+  // ---------- menu ----------
+
+  // The tag sits at 25 degrees, which is the lighting booth on the stage
+  // capture: above the top balcony, below the dome. It was at 38, and when the
+  // heading moved to house centre that put it in the middle of the skylight.
+  // Landing it on something the room actually has gives it somewhere to be.
+  //
+  // Icons rather than words, laid out as two rows: what there is on top, and
+  // what you can do to the thing you picked underneath. Position is what you
+  // remember rather than the reading, so nothing moves and nothing is ever
+  // replaced, which is also why there is no "back" anywhere in here.
+  //
+  // This was a ring first. Five small tiles on a circle do not read as a circle,
+  // they read as scattered, so there was no shape to learn and the whole reason
+  // for the ring went with it. A row scans.
+  // The menu has no timer at all. It closed itself on a countdown once, which
+  // is a thing that can only ever happen at the wrong moment: it goes when you
+  // say it goes.
+  var MENU_REACH = 0.85;
+  var TILE = 0.105;
+  var HANDLE = 0.058;
+  // how far above and below the piano its two height buttons sit
+  var LIFT_REACH = 0.14;
+  // The menu hangs from its tag. The tag is the thing you park and both rows
+  // keep their fixed distance below it, so it moves as one piece and the shape
+  // you have learned survives the move. These were 14 and 5 against a tag at
+  // 25, which is where the drops come from.
+  var ROW_DROP = THREE.MathUtils.degToRad(11);
+  var BLOOM_DROP = THREE.MathUtils.degToRad(20);
+  var TIP_DROP = THREE.MathUtils.degToRad(12);
+
+  // How far the tag may be parked. Below 15 the options row reaches down onto
+  // the green room's door marker at 12 degrees under the horizon, and two live
+  // things in one place is how you leave a room you meant to stay in. Above 45
+  // is further up than a neck wants to go for something you will look at all
+  // evening.
+  var TAB_MIN = THREE.MathUtils.degToRad(15);
+  var TAB_MAX = THREE.MathUtils.degToRad(45);
+  var ROW_STEP = THREE.MathUtils.degToRad(9);
+  var GROUP_GAP = THREE.MathUtils.degToRad(5.5);
+  var BLOOM_STEP = THREE.MathUtils.degToRad(8.2);
+  var BLOOM_SHIFT = THREE.MathUtils.degToRad(6);
+  var BLOOM_REACH = THREE.MathUtils.degToRad(26);   // furthest a row may sit off centre
+
+  var menu = {
+    open: false, sel: -1, idle: 0,
+    tabYaw: 0, tabPitch: THREE.MathUtils.degToRad(25),
+    ringYaw: 0,
+    tab: null, ring: [], bloom: [], handles: []
+  };
+  var texCache = {};
+  var allTiles = [];
+
+  // The coordinate space is minus fifty to fifty about the centre, so every
+  // glyph is drawn at one scale whatever size the tile ends up.
+  function drawGlyph(g, name) {
+    g.strokeStyle = '#F1F3F5';
+    g.fillStyle = '#F1F3F5';
+    g.lineWidth = 7;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+
+    function arrow(x1, y1, x2, y2) {
+      g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+      var a = Math.atan2(y2 - y1, x2 - x1), h = 13;
+      g.beginPath();
+      g.moveTo(x2, y2);
+      g.lineTo(x2 - h * Math.cos(a - 0.5), y2 - h * Math.sin(a - 0.5));
+      g.lineTo(x2 - h * Math.cos(a + 0.5), y2 - h * Math.sin(a + 0.5));
+      g.closePath(); g.fill();
+    }
+
+    if (name === 'piano') {
+      g.strokeRect(-46, -26, 92, 52);
+      for (var i = -1; i <= 1; i++) {
+        g.beginPath(); g.moveTo(i * 23, -26); g.lineTo(i * 23, 26); g.stroke();
+      }
+      [-34, -11, 12, 35].forEach(function (x) { g.fillRect(x - 6, -26, 12, 30); });
+      return;
+    }
+    if (name === 'window') {
+      g.strokeRect(-40, -34, 80, 68);
+      g.lineWidth = 5;
+      g.beginPath();
+      g.moveTo(0, -34); g.lineTo(0, 34);
+      g.moveTo(-40, 0); g.lineTo(40, 0);
+      g.stroke();
+      return;
+    }
+    if (name === 'room') {
+      g.beginPath();
+      g.moveTo(-34, 44); g.lineTo(-34, -8);
+      g.quadraticCurveTo(-34, -44, 0, -44);
+      g.quadraticCurveTo(34, -44, 34, -8);
+      g.lineTo(34, 44);
+      g.stroke();
+      g.beginPath(); g.arc(18, 6, 5, 0, 6.284); g.fill();
+      return;
+    }
+    if (name === 'movemenu') {
+      g.strokeRect(-38, -13, 76, 26);
+      g.lineWidth = 5;
+      g.beginPath(); g.moveTo(-24, 0); g.lineTo(24, 0); g.stroke();
+      g.lineWidth = 7;
+      arrow(0, -22, 0, -46);
+      arrow(0, 22, 0, 46);
+      return;
+    }
+    if (name === 'exit') {
+      // a doorway standing open on its far side, and you going out through it.
+      // Deliberately nothing like the close cross: those two sit next to each
+      // other and one of them ends the session.
+      g.beginPath();
+      g.moveTo(10, -42); g.lineTo(-34, -42); g.lineTo(-34, 42); g.lineTo(10, 42);
+      g.stroke();
+      arrow(0, 0, 42, 0);
+      return;
+    }
+    if (name === 'recenter') {
+      g.beginPath(); g.arc(0, 0, 26, 0, 6.284); g.stroke();
+      [[0, -46, 0, -32], [0, 46, 0, 32], [-46, 0, -32, 0], [46, 0, 32, 0]].forEach(function (l) {
+        g.beginPath(); g.moveTo(l[0], l[1]); g.lineTo(l[2], l[3]); g.stroke();
+      });
+      g.beginPath(); g.arc(0, 0, 6, 0, 6.284); g.fill();
+      return;
+    }
+    if (name === 'close') {
+      g.beginPath();
+      g.moveTo(-30, -30); g.lineTo(30, 30);
+      g.moveTo(30, -30); g.lineTo(-30, 30);
+      g.stroke();
+      return;
+    }
+    if (name === 'lower' || name === 'higher') {
+      g.beginPath(); g.moveTo(-44, 0); g.lineTo(44, 0); g.stroke();
+      if (name === 'lower') arrow(0, 10, 0, 44); else arrow(0, -10, 0, -44);
+      return;
+    }
+    if (name === 'gripH' || name === 'gripV') {
+      g.lineWidth = 9;
+      if (name === 'gripH') {
+        g.beginPath(); g.moveTo(0, -30); g.lineTo(0, 30); g.stroke();
+        arrow(14, 0, 42, 0); arrow(-14, 0, -42, 0);
+      } else {
+        g.beginPath(); g.moveTo(-30, 0); g.lineTo(30, 0); g.stroke();
+        arrow(0, 14, 0, 42); arrow(0, -14, 0, -42);
+      }
+      return;
+    }
+    if (name === 'size') {
+      g.strokeRect(-40, -30, 80, 60);
+      arrow(-8, -6, -36, -26);
+      arrow(8, 6, 36, 26);
+      return;
+    }
+    if (name === 'addwindow') {
+      g.strokeRect(-46, -38, 68, 62);
+      g.lineWidth = 5;
+      g.beginPath();
+      g.moveTo(-12, -38); g.lineTo(-12, 24);
+      g.moveTo(-46, -7); g.lineTo(22, -7);
+      g.stroke();
+      g.lineWidth = 8;
+      g.beginPath();
+      g.moveTo(34, 18); g.lineTo(34, 48);
+      g.moveTo(19, 33); g.lineTo(49, 33);
+      g.stroke();
+      return;
+    }
+    if (name === 'move') {
+      arrow(0, 0, 0, -40); arrow(0, 0, 0, 40);
+      arrow(0, 0, -40, 0); arrow(0, 0, 40, 0);
+      return;
+    }
+    if (name === 'hide' || name === 'show') {
+      g.lineWidth = 6;
+      g.beginPath();
+      g.moveTo(-40, 0); g.quadraticCurveTo(0, -30, 40, 0);
+      g.quadraticCurveTo(0, 30, -40, 0);
+      g.stroke();
+      g.beginPath(); g.arc(0, 0, 8, 0, 6.284); g.fill();
+      if (name === 'hide') {
+        g.beginPath(); g.moveTo(-34, -26); g.lineTo(34, 26); g.stroke();
+      }
+      return;
+    }
+    if (name === 'add') {
+      g.beginPath();
+      g.moveTo(0, -34); g.lineTo(0, 34);
+      g.moveTo(-34, 0); g.lineTo(34, 0);
+      g.stroke();
+      return;
+    }
+  }
+
+  // Icon above, a small word below it. The word stays because an icon on its
+  // own asks you to guess, and guessing is what the old menu got wrong.
+  function iconTexture(icon, label, accent) {
+    var c = document.createElement('canvas');
+    c.width = 160; c.height = 160;
+    var g = c.getContext('2d');
+
+    g.fillStyle = accent ? 'rgba(239,233,223,0.95)' : 'rgba(20,22,25,0.88)';
+    roundRect(g, 4, 4, 152, 152, 26); g.fill();
+    g.strokeStyle = accent ? 'rgba(48,41,37,0.85)' : 'rgba(201,145,63,0.5)';
+    g.lineWidth = accent ? 5 : 3;
+    roundRect(g, 4, 4, 152, 152, 26); g.stroke();
+
+    g.save();
+    g.translate(80, 64);
+    g.scale(0.6, 0.6);
+    if (accent) { g.strokeStyle = '#191614'; g.fillStyle = '#191614'; }
+    drawGlyph(g, icon);
+    g.restore();
+
+    g.fillStyle = accent ? '#191614' : '#D8DCE1';
+    var size = 26;
+    g.font = '500 ' + size + 'px system-ui, sans-serif';
+    while (size > 13 && g.measureText(label).width > 138) {
+      size -= 1;
+      g.font = '500 ' + size + 'px system-ui, sans-serif';
+    }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(label, 80, 132);
+
+    var t = new THREE.CanvasTexture(c);
+    t.minFilter = THREE.LinearFilter;
+    return t;
+  }
+
+  function cachedIcon(icon, label, active) {
+    var k = (active ? 'i+|' : 'i|') + icon + '|' + label;
+    if (!texCache[k]) texCache[k] = iconTexture(icon, label, !!active);
+    return texCache[k];
+  }
+
+  function cachedLabel(text, accent) {
+    var k = (accent ? 'A:' : 'P:') + text;
+    if (!texCache[k]) texCache[k] = labelTexture(text, accent);
+    return texCache[k];
+  }
+
+  function plate(w, h, tex) {
+    var m = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ map: tex || null, transparent: true, depthTest: false })
+    );
+    m.renderOrder = 10;
+    return m;
+  }
+
+  function aimAt(obj, yawA, pitchA, radius) {
+    var h = head();
+    obj.position.set(
+      h.x + radius * Math.cos(pitchA) * Math.sin(yawA),
+      h.y + radius * Math.sin(pitchA),
+      h.z - radius * Math.cos(pitchA) * Math.cos(yawA)
+    );
+    obj.lookAt(h);
+  }
+
+  function makeTile(size) {
+    var s = size || TILE;
+    var t = plate(s, s, null);
+    t.renderOrder = 11;
+    t.visible = false;
+    var fg = new THREE.PlaneGeometry(1, s);
+    fg.translate(0.5, 0, 0);
+    var fill = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({
+      color: 0xC9913F, transparent: true, opacity: 0.34, depthTest: false
+    }));
+    fill.renderOrder = 12;
+    fill.position.set(-s / 2, 0, 0.001);
+    fill.visible = false;
+    t.add(fill);
+    t.userData.fill = fill;
+    t.userData.size = s;
+    scene.add(t);
+    return t;
+  }
+
+  function buildMenu() {
+    menu.tab = plate(0.17, 0.085, cachedLabel('menu', true));
+    menu.tab.userData.id = 'open';
+    menu.tab.visible = false;
+    scene.add(menu.tab);
+
+    var i;
+    // six items fit the row today; the spare two are so that raising
+    // PANEL_MAX cannot silently push close or the way out off the end
+    for (i = 0; i < 8; i++) menu.ring.push(makeTile());
+    for (i = 0; i < 5; i++) menu.bloom.push(makeTile());
+    for (i = 0; i < 4; i++) {
+      var hnd = plate(HANDLE, HANDLE, null);
+      hnd.renderOrder = 13;
+      hnd.visible = false;
+      scene.add(hnd);
+      menu.handles.push(hnd);
+    }
+    doorMark = makeTile(DOOR_TILE);
+    // beneath the menu row, so a menu opened while you happen to be facing the
+    // way out still reads on top of it rather than fighting it
+    doorMark.renderOrder = 8;
+    doorMark.userData.fill.renderOrder = 9;
+    doorMark.userData.dwell = DOOR_DWELL;
+    allTiles = menu.ring.concat(menu.bloom).concat(menu.handles).concat([doorMark]);
+
+    hintPlate = plate(0.34, 0.085, cachedLabel('hold still to place'));
+    hintPlate.renderOrder = 13;
+    hintPlate.visible = false;
+    scene.add(hintPlate);
+
+    menuTip = plate(0.40, 0.10, cachedLabel('look up for the menu'));
+    menuTip.renderOrder = 11;
+    menuTip.visible = false;
+    scene.add(menuTip);
+  }
+
+  function setHint(text) {
+    hintPlate.material.map = cachedLabel(text);
+    hintPlate.material.needsUpdate = true;
+  }
+
+  // Two groups, and the gap between them is doing real work. Everything in the
+  // first is about this room and what is in it. Everything in the second is
+  // about being done with it.
+  //
+  // Changing room was here once, first in the middle of the piano and the
+  // window where it read as a list of unrelated things, then over in the second
+  // group. It is gone: you leave a room by its door now, and a menu entry that
+  // does the same thing from anywhere is the weaker of the two ideas.
+  function ringItems() {
+    var out = [{ id: 'sel:piano', icon: 'piano', label: 'piano', group: 0 }];
+    for (var i = 0; i < panels.length; i++) {
+      out.push({
+        id: 'sel:panel:' + i, icon: 'window', group: 0,
+        label: panels.length > 1 ? 'window ' + (i + 1) : 'window'
+      });
+    }
+    if (panels.length < PANEL_MAX) out.push({ id: 'addpanel', icon: 'addwindow', label: 'window', group: 0 });
+    out.push({ id: 'recenter', icon: 'recenter', label: 'recenter', group: 0 });
+    // The way out of this room, where this room's way out lives in the menu.
+    // It goes at the end of the group about this room and what is in it, so
+    // that piano, window and recenter stay where your eye already knows to
+    // find them. Same long hold as the door marker it replaces: a whole room
+    // on the 0.85 seconds that hides a window is something that would happen
+    // to you rather than something you did.
+    var way = DOORS[currentEnv];
+    if (way && way.viaMenu) {
+      out.push({ id: 'door', icon: 'room', label: way.label, group: 0,
+        dwell: DOOR_DWELL });
+    }
+    out.push({ id: 'movemenu', icon: 'movemenu', label: 'move menu', group: 1 });
+    out.push({ id: 'close', icon: 'close', label: 'close', group: 1 });
+    // With it on your face the page's own Exit button is not on screen, because
+    // there is no screen: the only way out was whatever gesture the headset
+    // itself offers, which is not this app's to teach and is not the same on
+    // any two of them. It sits next to close, which is the one it can be
+    // mistaken for, so it asks for the same long hold as a door instead of the
+    // ordinary dwell. Ending a session by glancing at the wrong tile is not a
+    // thing that should be able to happen.
+    out.push({ id: 'exitvr', icon: 'exit', label: 'exit vr', group: 1,
+      dwell: DOOR_DWELL });
+    return out.slice(0, menu.ring.length);
+  }
+
+  // Sizing was four buttons in a row, then four floating around the object, and
+  // neither worked: the first put the control somewhere other than the thing it
+  // changed, the second scattered four tiles into the air with nothing tying
+  // them to anything. It is one gesture now, the sibling of move. Pick size and
+  // the corner of the thing follows your eyes, so you look at where you want the
+  // edge to be and hold still, exactly as you do to put it down.
+  function bloomItems(ringId) {
+    if (ringId === 'sel:piano') {
+      return [
+        { id: 'move:piano', icon: 'move', label: 'move' },
+        { id: 'size:piano', icon: 'size', label: 'size' },
+        { id: 'hide:piano', icon: piano.on ? 'hide' : 'show', label: piano.on ? 'hide' : 'show' }
+      ];
+    }
+    var m = /^sel:panel:(\d+)$/.exec(ringId || '');
+    if (m) {
+      var i = m[1], pan = panels[parseInt(i, 10)];
+      if (!pan) return [];
+      return [
+        { id: 'move:' + i, icon: 'move', label: 'move' },
+        { id: 'size:' + i, icon: 'size', label: 'size' },
+        { id: 'hide:' + i, icon: pan.on ? 'hide' : 'show', label: pan.on ? 'hide' : 'show' }
+      ];
+    }
+    return [];
+  }
+
+  var _r = new THREE.Vector3(), _u = new THREE.Vector3(), _p = new THREE.Vector3();
+
+  function placeTile(tile, item, yawA, pitchA, active) {
+    tile.visible = true;
+    tile.userData.id = item.id;
+    tile.userData.repeat = !!item.repeat;
+    // tiles are reused as the row changes, so this is set every time rather
+    // than only when an item asks for it
+    tile.userData.dwell = item.dwell || 0;
+    tile.material.map = cachedIcon(item.icon, item.label, active);
+    tile.material.needsUpdate = true;
+    tile.scale.setScalar(1);
+    aimAt(tile, yawA, pitchA, MENU_REACH);
+  }
+
+  function layoutMenu() {
+    var i;
+    menu.tab.visible = false;
+    menuTip.visible = false;
+    for (i = 0; i < menu.ring.length; i++) menu.ring[i].visible = false;
+    for (i = 0; i < menu.bloom.length; i++) menu.bloom[i].visible = false;
+
+    for (i = 0; i < menu.handles.length; i++) menu.handles[i].visible = false;
+
+    layoutDoor();
+
+    if (!inScene || movingRig || recentering || parking) { refreshPickables(); return; }
+
+    // size mode: the edges of the thing, and the tag overhead to be done
+    if (sizingRig) {
+      if (!grabbedEdge) {
+        layoutHandles();
+        menu.tab.visible = true;
+        menu.tab.userData.id = 'endsize';
+        menu.tab.material.map = cachedLabel('done', true);
+        menu.tab.material.needsUpdate = true;
+        aimAt(menu.tab, menu.tabYaw, menu.tabPitch, MENU_REACH);
+      }
+      refreshPickables();
+      return;
+    }
+
+    menu.tab.userData.id = 'open';
+    menu.tab.material.map = cachedLabel('menu', true);
+    menu.tab.material.needsUpdate = true;
+
+    if (!menu.open) {
+      menu.tab.visible = true;
+      aimAt(menu.tab, menu.tabYaw, menu.tabPitch, MENU_REACH);
+      if (!menuFound) {
+        menuTip.visible = true;
+        aimAt(menuTip, menu.tabYaw, menu.tabPitch - TIP_DROP, MENU_REACH);
+      }
+      refreshPickables();
+      return;
+    }
+
+    var items = ringItems();
+    if (menu.sel >= items.length) menu.sel = -1;
+
+    // a straight row, left to right, so an item keeps its place between one
+    // visit and the next and you can go to it without reading it, with a wider
+    // gap wherever the row crosses from one group to the other
+    var n = items.length;
+    var offs = [], run = 0;
+    for (i = 0; i < n; i++) {
+      if (i > 0) run += ROW_STEP + (items[i].group !== items[i - 1].group ? GROUP_GAP : 0);
+      offs.push(run);
+    }
+    var mid = offs[n - 1] / 2;
+    for (i = 0; i < n; i++) {
+      placeTile(menu.ring[i], items[i], menu.ringYaw + offs[i] - mid,
+        menu.tabPitch - ROW_DROP, i === menu.sel);
+    }
+
+    if (menu.sel >= 0) {
+      var bl = bloomItems(items[menu.sel].id);
+      var selYaw = offs[menu.sel] - mid;
+      // The options sit in one row under the ring rather than fanning outward
+      // from the item. Outward from the top of the ring meant looking up past
+      // 45 degrees; this keeps every choice in the same comfortable band. The
+      // row slides towards whichever item you picked, and that item stays
+      // enlarged, so it still reads as having come from there.
+      // a long row is already near the edge of an easy glance, so the further
+      // it reaches the less it is allowed to slide towards its item
+      var half = (bl.length - 1) / 2 * BLOOM_STEP;
+      var room = Math.max(0, BLOOM_REACH - half);
+      var shift = Math.max(-BLOOM_SHIFT, Math.min(BLOOM_SHIFT, selYaw));
+      shift = Math.max(-room, Math.min(room, shift));
+      for (i = 0; i < bl.length && i < menu.bloom.length; i++) {
+        placeTile(menu.bloom[i], bl[i],
+          menu.ringYaw + shift + (i - (bl.length - 1) / 2) * BLOOM_STEP,
+          menu.tabPitch - BLOOM_DROP);
+      }
+      menu.ring[menu.sel].scale.setScalar(1.12);
+    }
+    refreshPickables();
+  }
+
+  function buildReticle() {
+    reticle = new THREE.Group();
+    var dot = new THREE.Mesh(
+      new THREE.RingGeometry(0.005, 0.007, 24),
+      new THREE.MeshBasicMaterial({ color: 0xEFE9DF, transparent: true, opacity: 0.5, depthTest: false })
+    );
+    dot.renderOrder = 20;
+    reticleRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.010, 0.015, 32, 1, Math.PI / 2, 0.001),
+      new THREE.MeshBasicMaterial({ color: 0xC9913F, transparent: true, opacity: 0, depthTest: false, side: THREE.DoubleSide })
+    );
+    reticleRing.renderOrder = 21;
+    reticle.add(dot);
+    reticle.add(reticleRing);
+    reticle.position.set(0, 0, -0.6);
+    reticle.visible = false;
+    camera.add(reticle);
+  }
+
+  // ---------- panorama ----------
+
+  // Which column of each panorama should sit dead ahead, as a fraction across
+  // the image. An unrotated inverted sphere puts u = 0.75 in front of you, and
+  // on the stage capture that is the house-left wall, so you started off looking
+  // at the side of the proscenium with the audience over your shoulder. The
+  // The house runs from about 0.325 to 0.735 across the image. Its centre is
+  // 0.556, not the 0.54 that reading the strip by eye suggested: the skylight's
+  // centre of brightness lands there, which is 5.7 degrees further round. That
+  // is what you face on arrival and after every recenter.
+  //
+  // The green room had never been aimed at all: 0.75 is only where an unrotated
+  // sphere happens to land, and it put a blank block wall in front of you with
+  // the way out 89 degrees off your shoulder, so you arrived able to see the
+  // menu and nothing else. 0.506 is the middle of the open doorway. Everything
+  // you can do in that room now reads in one glance: the way out in the opening,
+  // and the menu tag on the head of the frame above it, because the frame head
+  // sits at 23 degrees and the tag was already at 25.
+  var ENV_FORWARD = { 'img-stage': 0.556, 'img-green': 0.506 };
+
+  function loadSky(id) {
+    var img = document.getElementById(id);
+    if (!img) { errEl.textContent = 'That panorama is missing.'; return; }
+    var fwd = ENV_FORWARD.hasOwnProperty(id) ? ENV_FORWARD[id] : 0.75;
+    sky.rotation.y = 2 * Math.PI * (fwd + 0.25);
+    function apply() {
+      var t = new THREE.Texture(img);
+      t.minFilter = THREE.LinearFilter;
+      t.needsUpdate = true;
+      if (skyTex) skyTex.dispose();
+      skyTex = t;
+      sky.material.dispose();
+      sky.material = new THREE.MeshBasicMaterial({ map: t });
+    }
+    if (img.complete && img.naturalWidth) apply();
+    else {
+      img.addEventListener('load', apply, { once: true });
+      img.addEventListener('error', function () { errEl.textContent = 'The panorama did not load.'; }, { once: true });
+    }
+  }
+
+  function startPassthrough() {
+    if (videoTex) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      // A dark window is a smaller problem than no head tracking, and there is
+      // one line to say it in, so it does not talk over anything already there.
+      if (!errEl.textContent) errEl.textContent = 'This page cannot open the camera here. The keys window stays dark; the physical cutout still works.';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+      .then(function (stream) {
+        videoEl = document.createElement('video');
+        videoEl.setAttribute('playsinline', '');
+        videoEl.muted = true;
+        videoEl.srcObject = stream;
+        videoEl.play();
+        videoTex = new THREE.VideoTexture(videoEl);
+        videoTex.minFilter = THREE.LinearFilter;
+        attachVideo();
+      })
+      .catch(function () {
+        if (!errEl.textContent) errEl.textContent = 'Camera access was refused. The keys window stays dark; the physical cutout still works.';
+      });
+  }
+
+  // ---------- remembering your setup ----------
+
+  // Placing a window from inside a viewer is fiddly enough that doing it again
+  // every session is the worst of the friction. Everything below survives a
+  // reload; nothing here leaves the phone.
+  var STORE_KEY = 'hill-practice-LAB-v3';
+
+  // One arrangement, not one per room. The piano and the window are windows on
+  // real things, your keys and your stand, and those do not move when the
+  // picture behind them changes, so an arrangement that follows you between the
+  // rooms is the only one that stays true. It was a set per room once, which
+  // meant crossing a door left your window behind and handed you a fresh one at
+  // the default angle, pointing at nothing.
+  //
+  // What is per room is whether the piano is showing, because there is no piano
+  // in the green room. It goes when you arrive there and comes back on the stage
+  // if it was there when you left. Where it sits is not touched either way:
+  // hiding a thing is not forgetting it, and you fitted it to your real keys
+  // once.
+  //
+  // You still arrive to an empty room the first time. The piano and the window
+  // are things you add from the menu when you want them, which also means the
+  // camera is not asked for until something actually needs it.
+  var stagePianoOn = false;
+  var currentEnv = null;
+
+  // the stage's answer, wherever you happen to be standing when you ask for it
+  function stagePiano() {
+    return (currentEnv === 'img-stage') ? !!piano.on : !!stagePianoOn;
+  }
+
+  function enterRoom(env) {
+    stagePianoOn = stagePiano();
+    currentEnv = env;
+    piano.on = (env === 'img-stage') ? stagePianoOn : false;
+    piano.group.visible = piano.on;
+    placeAll();
+  }
+
+  function goToRoom(env) {
+    if (env === currentEnv) return;
+    enterRoom(env);
+    loadSky(env);
+    menu.sel = -1;
+    layoutMenu();
+    scheduleSave();
+  }
+  var saveTimer = null;
+  var forgetting = false;
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        env: currentEnv || document.getElementById('env').value,
+        menuFound: !!menuFound,
+        menuPitch: menu.tabPitch,
+        stagePianoOn: stagePiano(),
+        piano: {
+          yaw: piano.yaw, drop: piano.drop, dist: piano.dist, width: piano.width
+        },
+        panels: panels.map(function (q) {
+          return { on: !!q.on, azim: q.azim, elev: q.elev, dist: q.dist, w: q.w, h: q.h };
+        })
+      }));
+    } catch (e) { /* private window, blocked storage, quota: not worth a fuss */ }
+  }
+
+  // smaller and bigger fire every frame while you hold a gaze on them,
+  // so coalesce the writes rather than hammering storage sixty times a second
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveState, 400);
+  }
+
+  // a coalesced write is a write you can lose by closing the tab inside the
+  // window, so commit any pending one the moment the page goes away
+  function flushSave() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    // "start fresh" removes the saved arrangement and reloads, and a reload is
+    // a pagehide, which is exactly where the state gets committed. Without a
+    // way to say we are leaving on purpose, the flush wrote the whole thing
+    // back on the way out and nothing was ever actually forgotten.
+    if (forgetting) return;
+    saveState();
+  }
+  window.addEventListener('pagehide', flushSave);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) flushSave();
+  });
+
+  // stored numbers are only trusted inside the range the control itself allows,
+  // so a corrupt or hand-edited entry cannot strand a window somewhere unusable
+  function num(v, fallback, lo, hi) {
+    return (typeof v === 'number' && isFinite(v) && v >= lo && v <= hi) ? v : fallback;
+  }
+
+  function loadState() {
+    // Start from the markup default every time, so what the select holds is
+    // either the default or something this function put there. A reload
+    // restores form control values, and after "start fresh" there is nothing
+    // saved to override them, which would otherwise leave the old room
+    // selected with nothing behind it.
+    document.getElementById('env').value = 'img-stage';
+    var raw = null;
+    try { raw = localStorage.getItem(STORE_KEY); } catch (e) { return; }
+    if (!raw) return;
+    var s = null;
+    try { s = JSON.parse(raw); } catch (e) { return; }
+    if (!s || typeof s !== 'object') return;
+
+    if (s.env === 'img-stage' || s.env === 'img-green') {
+      document.getElementById('env').value = s.env;
+    }
+    menuFound = !!s.menuFound;
+    menu.tabPitch = num(s.menuPitch, menu.tabPitch, TAB_MIN, TAB_MAX);
+    stagePianoOn = !!s.stagePianoOn;
+
+    if (s.piano && typeof s.piano === 'object') {
+      piano.yaw   = num(s.piano.yaw,   RIG_YAW, -Math.PI, Math.PI);
+      piano.drop  = num(s.piano.drop,  0.46, 0.10, 1.10);
+      piano.dist  = num(s.piano.dist,  0.44, 0.20, 1.20);
+      piano.width = num(s.piano.width, 1.0,  0.40, 2.40);
+    }
+
+    if (Object.prototype.toString.call(s.panels) === '[object Array]') {
+      while (panels.length) removePanel(0);
+      for (var i = 0; i < s.panels.length && panels.length < PANEL_MAX; i++) {
+        var q = s.panels[i];
+        if (!q || typeof q !== 'object') continue;
+        panels.push(makePanel({
+          on:    q.on !== false,
+          azim:  num(q.azim,  RIG_YAW, -Math.PI, Math.PI),
+          elev:  num(q.elev,  THREE.MathUtils.degToRad(-14), -1.5, 1.5),
+          dist:  num(q.dist,  1.05, 0.35, 1.80),
+          w:     num(q.w,     1.05, 0.25, 2.40),
+          h:     num(q.h,     0.59, 0.25, 2.40)
+        }));
+      }
+    }
+  }
+
+  // ---------- head tracking ----------
+
+  function enableOrientation() {
+    return new Promise(function (resolve) {
+      var D = window.DeviceOrientationEvent;
+      function attach() { window.addEventListener('deviceorientation', onOrient, true); resolve(true); }
+      if (D && typeof D.requestPermission === 'function') {
+        D.requestPermission().then(function (r) {
+          if (r === 'granted') attach();
+          else {
+            errEl.textContent = 'Motion access was refused. Turn on Settings, Apps, Safari, Motion & Orientation Access.';
+            resolve(false);
+          }
+        }).catch(function () { resolve(false); });
+      } else if (D) { attach(); } else { resolve(false); }
+    });
+  }
+
+  function onOrient(e) {
+    if (e.alpha === null || e.alpha === undefined) return;
+    orient = { alpha: e.alpha, beta: e.beta, gamma: e.gamma, orient: (window.orientation || 0) };
+    // the first reading after entering is what "straight ahead" means, so the
+    // house lands where it was aimed instead of wherever the compass points
+    if (pendingRecenter) { pendingRecenter = false; doRecenter(); }
+  }
+
+  var zee = new THREE.Vector3(0, 0, 1);
+  var euler = new THREE.Euler();
+  var q0 = new THREE.Quaternion();
+  var q1 = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+  function applyOrientation(obj) {
+    var a = THREE.MathUtils.degToRad(orient.alpha) + yawOffset;
+    var b = THREE.MathUtils.degToRad(orient.beta);
+    var g = THREE.MathUtils.degToRad(orient.gamma);
+    var o = THREE.MathUtils.degToRad(orient.orient);
+    euler.set(b, a, -g, 'YXZ');
+    obj.quaternion.setFromEuler(euler);
+    obj.quaternion.multiply(q1);
+    obj.quaternion.multiply(q0.setFromAxisAngle(zee, -o));
+  }
+
+  function viewCamera() {
+    if (mode === 'xr' && renderer.xr.isPresenting) {
+      var c = renderer.xr.getCamera(camera);
+      if (c) return c;
+    }
+    return camera;
+  }
+
+  // ---------- gaze ----------
+
+  // rebuilding ring geometry every frame churns memory on a phone,
+  // so only redraw when the arc actually moves a visible amount
+  var lastArc = -1;
+  // hover and progress live on the row itself; the reticle is only for aiming
+  function paintSlots(hit, progress) {
+    // one flat list built once: this runs every frame
+    for (var i = 0; i < allTiles.length; i++) {
+      var s = allTiles[i];
+      if (!s.visible) continue;
+      var on = (s === hit);
+      var picked = (menu.sel >= 0 && s === menu.ring[menu.sel]);
+      s.scale.setScalar(on ? 1.14 : (picked ? 1.12 : 1));
+      var f = s.userData.fill;
+      // the sizing handles are bare plates and have no fill to sweep
+      if (!f) continue;
+      f.visible = on && progress > 0.01;
+      if (f.visible) f.scale.x = (s.userData.size || TILE) * Math.min(1, progress);
+    }
+  }
+
+  function setReticle(progress, color) {
+    var p = THREE.MathUtils.clamp(progress, 0, 1);
+    var q = Math.round(p * 24) / 24;
+    if (q !== lastArc) {
+      lastArc = q;
+      reticleRing.geometry.dispose();
+      reticleRing.geometry = new THREE.RingGeometry(
+        0.010, 0.015, 32, 1, Math.PI / 2, -Math.max(q, 0.001) * Math.PI * 2
+      );
+    }
+    reticleRing.material.color.setHex(color);
+    reticleRing.material.opacity = p > 0.02 ? 0.95 : 0;
+  }
+
+  function updateGaze(dt) {
+    var inSpace = inScene;
+    reticle.visible = inSpace;
+    if (!inSpace) { gazeHit = null; paintSlots(null, 0); return; }
+
+    var vc = viewCamera();
+    vc.updateMatrixWorld();
+    vPos.setFromMatrixPosition(vc.matrixWorld);
+    vc.getWorldQuaternion(tmpQ);
+    vDir.set(0, 0, -1).applyQuaternion(tmpQ);
+
+    if (movingRig || grabbedEdge || recentering || parking) {
+      if (movingRig) updateMovingRig(vDir);
+      if (grabbedEdge) { dragEdge(vPos, vDir); layoutHandles(); }
+      if (armDir.lengthSq() === 0) armDir.copy(vDir);
+      // net angle from where the hold was armed, not distance travelled, so
+      // jitter cannot quietly add up to it
+      var turned = THREE.MathUtils.radToDeg(armDir.angleTo(vDir));
+
+      var gYaw = Math.atan2(vDir.x, -vDir.z);
+      var gPitch = Math.asin(THREE.MathUtils.clamp(vDir.y, -1, 1));
+      aimAt(hintPlate, gYaw, gPitch + 0.19, MENU_REACH);
+      hintPlate.visible = true;
+
+      // holding your head still is how you commit when there is no button
+      moveAge += dt;
+      var raw = lastDir.lengthSq()
+        ? THREE.MathUtils.radToDeg(lastDir.angleTo(vDir)) / Math.max(dt, 1e-4)
+        : 0;
+      lastDir.copy(vDir);
+      swingAvg += (raw - swingAvg) * Math.min(1, dt / SWING_SMOOTH);
+
+      // a wobble takes progress back rather than wiping it, so a twitch a second
+      // into holding still costs you a moment, not the whole attempt
+      if (swingAvg > STEADY_LIMIT) steady = Math.max(0, steady - dt * STEADY_DECAY);
+      else steady += dt;
+
+      // Some of these will not commit until you have turned away from where
+      // the hold was armed: an edge because you took it to move it, a recenter
+      // because forward would otherwise land on the menu you picked it from.
+      // Hold the ring at nothing until that is true, rather than letting it
+      // sit full while nothing happens, which reads as a thing that is broken.
+      var needTurn = grabbedEdge ? EDGE_TURN : ((recentering || parking) ? MIN_TURN : 0);
+      if (turned <= needTurn) steady = 0;
+
+      var hold = grabbedEdge ? EDGE_DWELL : PLACE_DWELL;
+      setReticle(steady / hold, 0xC9913F);
+      if (steady >= hold && moveAge > MIN_MOVE) {
+        if (movingRig) drop();
+        else if (grabbedEdge) releaseEdge();
+        else if (parking) finishParking();
+        else finishRecenter();
+      }
+      return;
+    }
+    hintPlate.visible = false;
+
+    if (cooldown > 0) {
+      cooldown = Math.max(0, cooldown - dt);
+      setReticle(0, 0xEFE9DF);
+      paintSlots(null, 0);
+      gazeHit = null; gazeHeld = 0;
+      return;
+    }
+
+    raycaster.set(vPos, vDir);
+    var hits = raycaster.intersectObjects(pickables, false);
+    var obj = hits.length ? hits[0].object : null;
+
+    // a slot you just used will not fire again until your gaze has left it.
+    // tiles are reused as the ring changes, so without this the stare that
+    // picked one runs straight on into whatever lands in its place.
+    if (obj !== mustLeave) mustLeave = null;
+    else if (obj) { gazeHit = obj; gazeHeld = 0; setReticle(0, 0xEFE9DF); paintSlots(obj, 0); return; }
+
+    if (obj !== gazeHit) { gazeHit = obj; gazeHeld = 0; }
+    if (!obj) {
+      setReticle(0, 0xEFE9DF);
+      paintSlots(null, 0);
+      // a menu you have stopped using folds itself back down to the tab
+      return;
+    }
+    menu.idle = 0;
+    gazeHeld += dt;
+
+    // most things take the one dwell; the door out asks for longer
+    var dwell = obj.userData.dwell || DWELL;
+    var prog;
+    if (obj.userData.repeat) {
+      prog = gazeHeld > REPEAT_DELAY ? 1 : gazeHeld / REPEAT_DELAY;
+      if (gazeHeld > REPEAT_DELAY) activate(obj.userData.id, dt);
+      setReticle(prog, 0xC9913F);
+    } else if (gazeHeld > dwell) {
+      activate(obj.userData.id, dt);
+      mustLeave = obj;
+      cooldown = COOLDOWN;
+      prog = 1;
+    } else {
+      prog = Math.max(0, gazeHeld) / dwell;
+      setReticle(prog, 0xC9913F);
+    }
+    paintSlots(obj, prog);
+  }
+
+  function updateMovingRig(vDir) {
+    var r = movingRig;
+    if (r.kind === 'panel') {
+      r.azim = Math.atan2(vDir.x, -vDir.z);
+      r.elev = Math.asin(THREE.MathUtils.clamp(vDir.y, -1, 1));
+    } else {
+      // It used to ride a sphere an arm's length from your head, so lowering it
+      // dragged it towards you and there was no way to have it low and still out
+      // in front. It slides about on the plane it already sits at instead, and
+      // how high that plane is has its own control.
+      if (vDir.y > -0.05) return;
+      var t = -r.drop / vDir.y;
+      if (t <= 0.05 || t > 4) return;
+      var px = vDir.x * t, pz = vDir.z * t;
+      r.dist = Math.max(0.20, Math.min(1.20, Math.sqrt(px * px + pz * pz)));
+      r.yaw = Math.atan2(px, -pz);
+    }
+    placeRig(r);
+  }
+
+  function armHold() {
+    steady = 0;
+    moveAge = 0;
+    swingAvg = 0;
+    lastDir.set(0, 0, 0);
+    armDir.set(0, 0, 0);
+  }
+
+  // Pick size and the edge of the thing follows your eyes. Where your gaze
+  // meets its plane is where that edge goes, so you look at the size you want
+  // and hold still, the same ending as putting something down.
+  //
+  // The piano gets this too, and used to get "fit" instead: look at the left
+  // end of your real keys, then the right, and it took the width and position
+  // from the span between them. It asked you to aim at something you cannot
+  // see. The keys are only visible through the piano window, which is dark
+  // until you are already looking down at them, so there was nothing on screen
+  // to align to and no way to tell whether you had hit the end of the keyboard
+  // or a foot past it. Dragging an edge you can see beats aiming at one you
+  // cannot.
+  function startSizing(r) {
+    if (!r) return;
+    sizingRig = r;
+    grabbedEdge = null;
+    menu.open = false;
+    setHint('take an edge, hold still to let go');
+    armHold();
+    layoutMenu();
+  }
+
+  // let go of the edge but stay in size mode, so the next one is one look away
+  function releaseEdge() {
+    grabbedEdge = null;
+    steady = 0;
+    setHint('take an edge, hold still to let go');
+    hintPlate.visible = false;
+    scheduleSave();
+    layoutMenu();
+    cooldown = COOLDOWN;
+  }
+
+  function endSizing() {
+    sizingRig = null;
+    grabbedEdge = null;
+    steady = 0;
+    hintPlate.visible = false;
+    placeAll();
+    // as with drop: you came from the menu, so you go back to it
+    menu.open = true;
+    layoutMenu();
+    scheduleSave();
+    cooldown = COOLDOWN;
+  }
+
+  var _n = new THREE.Vector3(), _hit = new THREE.Vector3(), _d = new THREE.Vector3();
+  var _c = new THREE.Vector3();
+
+  // the plane the thing lives in, and the two directions across it
+  function rigFrame(r) {
+    r.group.updateMatrixWorld(true);
+    _c.copy(r.group.position);
+    if (r.kind === 'panel') {
+      _n.subVectors(head(), _c).normalize();
+      _r.set(1, 0, 0).applyQuaternion(r.group.quaternion);
+      _u.set(0, 1, 0).applyQuaternion(r.group.quaternion);
+    } else {
+      _n.set(0, 1, 0);
+      _r.set(1, 0, 0).applyQuaternion(r.group.quaternion);
+      _u.set(0, 0, -1).applyQuaternion(r.group.quaternion);
+    }
+  }
+
+  function halfOf(r, axis) {
+    if (r.kind !== 'panel') return 0.67 * r.width;
+    return axis === 'x' ? r.w / 2 : r.h / 2;
+  }
+
+  // put the centre back where azim/elev/dist or yaw/drop/dist can express it,
+  // because moving one edge moves the middle as well as the size
+  function recentreRig(r, c) {
+    if (r.kind === 'panel') {
+      var d = _d.subVectors(c, head());
+      r.dist = Math.max(0.35, Math.min(1.80, d.length()));
+      r.elev = Math.asin(THREE.MathUtils.clamp(d.y / (d.length() || 1), -1, 1));
+      r.azim = Math.atan2(d.x, -d.z);
+    } else {
+      r.dist = Math.max(0.20, Math.min(1.20, Math.sqrt(c.x * c.x + c.z * c.z)));
+      r.yaw = Math.atan2(c.x, -c.z);
+      r.drop = Math.max(0.10, Math.min(1.10, head().y - c.y));
+    }
+  }
+
+  // Drag one edge and the opposite one stays put, which is what an edge handle
+  // is for. Scaling about the middle is what the old size gesture did, and it
+  // meant you could never pin one side and pull the other.
+  function dragEdge(vPos, vDir) {
+    var r = sizingRig, side = grabbedEdge;
+    if (!r || !side) return;
+    rigFrame(r);
+
+    var denom = _n.dot(vDir);
+    if (Math.abs(denom) < 1e-4) return;
+    var t = _n.dot(_d.subVectors(_c, vPos)) / denom;
+    if (t <= 0.05) return;
+    _hit.copy(vPos).addScaledVector(vDir, t);
+    _d.subVectors(_hit, _c);
+
+    var horiz = (side === 'left' || side === 'right');
+    var axis = horiz ? _r : _u;
+    var half = halfOf(r, horiz ? 'x' : 'y');
+    var reach = _d.dot(axis);
+
+    var MIN = (r.kind === 'panel') ? 0.25 : 0.40 * 1.34;
+    var MAX = (r.kind === 'panel') ? 2.40 : 2.40 * 1.34;
+
+    var fixed, moved;
+    if (side === 'right' || side === 'up') {
+      fixed = -half;
+      moved = Math.max(fixed + MIN, Math.min(fixed + MAX, reach));
+    } else {
+      fixed = half;
+      moved = Math.min(fixed - MIN, Math.max(fixed - MAX, reach));
+    }
+
+    var newHalf = Math.abs(moved - fixed) / 2;
+    _c.addScaledVector(axis, (moved + fixed) / 2);
+
+    if (r.kind === 'panel') {
+      if (horiz) r.w = newHalf * 2; else r.h = newHalf * 2;
+    } else {
+      r.width = Math.max(0.40, Math.min(2.40, newHalf / 0.67));
+    }
+    recentreRig(r, _c);
+    placeRig(r);
+  }
+
+  var EDGES = [
+    { side: 'right', icon: 'gripH' },
+    { side: 'left',  icon: 'gripH' },
+    { side: 'up',    icon: 'gripV' },
+    { side: 'down',  icon: 'gripV' }
+  ];
+
+  function layoutHandles() {
+    var r = sizingRig, i;
+    for (i = 0; i < menu.handles.length; i++) menu.handles[i].visible = false;
+    if (!r) return;
+    rigFrame(r);
+    var h = head();
+    // a piano keeps its proportions, so only its sides are worth a handle
+    var n = (r.kind === 'panel') ? 4 : 2;
+    for (i = 0; i < n; i++) {
+      var e = EDGES[i], t = menu.handles[i];
+      var horiz = (e.side === 'left' || e.side === 'right');
+      var axis = horiz ? _r : _u;
+      var half = halfOf(r, horiz ? 'x' : 'y');
+      var sign = (e.side === 'right' || e.side === 'up') ? 1 : -1;
+      t.visible = true;
+      t.userData.id = 'edge:' + e.side;
+      t.userData.repeat = false;
+      t.material.map = cachedIcon(e.icon, '');
+      t.material.needsUpdate = true;
+      t.scale.setScalar(grabbedEdge === e.side ? 1.25 : 1);
+      t.position.copy(_c).addScaledVector(axis, sign * half);
+      t.lookAt(h);
+    }
+
+    // How far below your eyes the keys sit is the one thing a gaze cannot say,
+    // because a gaze is a direction and carries no distance, so height stays
+    // two buttons you hold. They were in the menu row, which is parked at its
+    // own heading: move the piano anywhere else and you were holding a gaze on
+    // "lower" with the piano nowhere in sight, changing a height you could not
+    // see. They belong on the piano, above and below it, where looking at one
+    // means looking at the thing it moves. The spare two handles are theirs.
+    if (r.kind !== 'panel') {
+      var lift = [
+        { id: 'higher', icon: 'higher', sign: 1 },
+        { id: 'lower', icon: 'lower', sign: -1 }
+      ];
+      for (i = 0; i < lift.length; i++) {
+        var q = lift[i], t2 = menu.handles[2 + i];
+        t2.visible = true;
+        t2.userData.id = q.id;
+        t2.userData.repeat = true;
+        t2.material.map = cachedIcon(q.icon, '');
+        t2.material.needsUpdate = true;
+        t2.scale.setScalar(1);
+        t2.position.copy(_c);
+        t2.position.y += q.sign * LIFT_REACH;
+        t2.lookAt(h);
+      }
+    }
+  }
+
+  function grab(r) {
+    if (!r) return;
+    movingRig = r;
+    setHint('hold still to place');
+    armHold();
+    layoutMenu();
+  }
+
+  // Recenter cannot fire the instant you pick it, because to pick it you are
+  // looking 48 degrees off to the left at the menu, and front would end up
+  // there. So it arms, you look where you want front to be, and holding still
+  // commits it, the same gesture as putting a window down.
+  function startRecenter() {
+    menu.open = false;
+    recentering = true;
+    setHint('look ahead, hold still');
+    armHold();
+    layoutMenu();
+  }
+
+  // Twenty-five degrees was a number picked on a screen. Through a viewer's
+  // lenses it is not the same glance: the comfortable band is narrower, and
+  // where it wants to sit depends on the viewer and on the neck of whoever is
+  // wearing it. So it gets placed the way everything else in here gets placed.
+  //
+  // The height and nothing else. The menu is straight ahead of you by
+  // definition, a bearing is what recenter is for, and a menu parked off to one
+  // side is a menu you have to remember the way to.
+  //
+  // Like a recenter it will not commit until you have looked somewhere, because
+  // you picked it by staring at a tile and that tile is not where you want it.
+  function startParking() {
+    menu.open = false;
+    parking = true;
+    // the plate shrinks text to fit and gives up at 17px; longer than about
+    // "look ahead, hold still" and the ends run off the edge
+    setHint('menu here, hold still');
+    armHold();
+    layoutMenu();
+  }
+
+  function finishParking() {
+    parking = false;
+    steady = 0;
+    hintPlate.visible = false;
+    var vc = viewCamera();
+    vc.updateMatrixWorld();
+    vc.getWorldQuaternion(tmpQ);
+    var d = new THREE.Vector3(0, 0, -1).applyQuaternion(tmpQ);
+    menu.tabPitch = THREE.MathUtils.clamp(
+      Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)), TAB_MIN, TAB_MAX);
+    scheduleSave();
+    layoutMenu();
+    cooldown = COOLDOWN;
+  }
+
+  function finishRecenter() {
+    recentering = false;
+    steady = 0;
+    hintPlate.visible = false;
+    doRecenter();
+    layoutMenu();
+    cooldown = COOLDOWN;
+  }
+
+  // Whether yawOffset yet means anything. Until the first orientation reading
+  // lands there is no relation at all between a world bearing and the real
+  // room, so the first recenter of a session establishes that frame rather than
+  // turning it, and nothing should be taken out of the rigs for it.
+  var framed = false;
+
+  // Which way you are actually facing, as a bearing in the room.
+  //
+  // Not alpha. Alpha is the compass heading of the phone's own yaw axis, and
+  // the direction you are looking is that turned by the tilt and by the roll as
+  // well. Recentring on alpha assumed a phone held perfectly upright and
+  // perfectly level, and missed by roughly your roll angle otherwise: rolled 20
+  // degrees it put forward 20 degrees out, and tilted up 30 and rolled 25 it
+  // was out by 28. You are always rolled a little holding a phone up, and in a
+  // viewer you are rolled by however the viewer sits on your face. That is the
+  // whole of "it moves things, but not to where I am looking".
+  //
+  // On a phone this runs the same maths applyOrientation does, on a spare
+  // object, and takes the bearing of the result. It is read off the current
+  // reading rather than off the camera because the first recenter of a session
+  // happens on the first reading to arrive, before any frame has been drawn.
+  var _look = new THREE.Object3D(), _lookDir = new THREE.Vector3();
+  var _lookQ = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
+
+  function lookAzimuth() {
+    if (mode === 'xr') {
+      var c = viewCamera();
+      c.updateMatrixWorld();
+      c.getWorldQuaternion(_lookQ);
+      _lookDir.set(0, 0, -1).applyQuaternion(_lookQ);
+    } else {
+      if (!orient) return 0;
+      applyOrientation(_look);
+      _lookDir.set(0, 0, -1).applyQuaternion(_look.quaternion);
+    }
+    return Math.atan2(_lookDir.x, -_lookDir.z);
+  }
+
+  function doRecenter() {
+    var can = (mode === 'xr')
+      ? renderer.xr.isPresenting
+      : ((mode === 'stereo' || mode === 'window') && !!orient);
+
+    if (can) {
+      // The bearing you are facing has to become zero, so everything the room
+      // owns swings round to you. That is a turn of minus that bearing, and
+      // each mode has its own way of being turned.
+      // Three.js rotates about +Y in the direction that *decreases* a bearing
+      // read as atan2(x, -z), and applyOrientation folds yawOffset in the same
+      // way: adding d to yawOffset moves the view bearing by minus d, measured.
+      // So the turn that brings the bearing you are facing to zero is plus it,
+      // not minus it, and the first version of this doubled the error instead
+      // of cancelling it.
+      var delta = lookAzimuth();
+      var applied = false;
+
+      if (mode === 'xr') {
+        // A session owns the camera, so there is no yawOffset to move: what
+        // turns is the frame the headset reports poses in. Offsetting that
+        // frame the other way brings every pose back turned the way we want,
+        // which is the same turn the other modes get out of yawOffset.
+        //
+        // This is why the tile did nothing at all in a headset. There was no
+        // branch for it here, so it armed, asked you to hold still, committed,
+        // and moved nothing.
+        var ref = renderer.xr.getReferenceSpace();
+        if (ref && ref.getOffsetReferenceSpace && typeof XRRigidTransform === 'function') {
+          // poses come back through the inverse of the offset, so the offset is
+          // the opposite way round from the turn we want the view to make
+          var q = new THREE.Quaternion().setFromAxisAngle(UP, -delta);
+          renderer.xr.setReferenceSpace(ref.getOffsetReferenceSpace(
+            new XRRigidTransform({ x: 0, y: 0, z: 0, w: 1 },
+                                 { x: q.x, y: q.y, z: q.z, w: q.w })));
+          applied = true;
+        }
+      } else {
+        yawOffset += delta;
+        applied = true;
+      }
+
+      if (applied) {
+        // The panorama, the menu and the doors are meant to swing round and
+        // face you: that is the whole of recentring. The piano and the window
+        // are not. They are aimed at real things that have not moved — your
+        // keys, your stand — but they are held as bearings in the room, so the
+        // turn slides them off by exactly the angle you turned through, and a
+        // room change does this too. Take that angle back out of them and they
+        // stay on the real thing while everything else comes to you.
+        if (framed) {
+          piano.yaw -= delta;
+          for (var i = 0; i < panels.length; i++) panels[i].azim -= delta;
+        }
+        framed = true;
+        placeAll();
+        scheduleSave();
+      }
+    }
+    yaw = 0; pitch = 0;
+  }
+
+  function drop() {
+    movingRig = null;
+    steady = 0;
+    hintPlate.visible = false;
+    placeAll();
+    // Move and size both put the menu away on the way in, because a row of
+    // tiles across the thing you are placing is in the way of seeing it. They
+    // used to leave it away afterwards too, so finishing one adjustment meant
+    // looking up and opening the menu again before you could make the next,
+    // and you almost never make only one. It comes back as you left it, with
+    // the same item still picked and its options under it. The cooldown after
+    // an action covers the row landing where you happen to be looking.
+    menu.open = true;
+    layoutMenu();
+    scheduleSave();
+    // do not let the stare that placed it fall straight onto the menu
+    cooldown = COOLDOWN;
+  }
+
+  // Leaving, from the button on a screen or from the menu with it on your face.
+  // Ending an XR session also fires its own end handler, which puts the mode
+  // back and shows the chrome; doing both is harmless, and doing neither is not
+  // an option because in the split screen there is no session to end.
+  function leaveScene() {
+    var s = renderer.xr.getSession && renderer.xr.getSession();
+    if (mode === 'xr' && s) s.end();
+    mode = 'flat';
+    movingRig = null; sizingRig = null; grabbedEdge = null;
+    recentering = false; parking = false; pendingRecenter = false; steady = 0;
+    showChrome(false);
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+  }
+
+  function activate(id, dt) {
+    var step = dt || 0.016;
+    if (!id) return;
+    if (id === 'exitvr') { leaveScene(); return; }
+
+    if (id === 'endsize') { endSizing(); return; }
+    if (id.indexOf('edge:') === 0) {
+      grabbedEdge = id.slice(5);
+      setHint('hold still to let go');
+      armHold();
+      layoutMenu();
+      return;
+    }
+    if (id === 'open')  { menu.open = true; menu.sel = -1; menu.idle = 0; menuFound = true; scheduleSave(); layoutMenu(); return; }
+    if (id === 'close') { menu.open = false; menu.idle = 0; layoutMenu(); return; }
+    if (id === 'recenter') { startRecenter(); return; }
+    if (id === 'movemenu') { startParking(); return; }
+
+    if (id === 'door') { switchRoom(); return; }
+    // picking a ring item does not replace anything: it blooms beside it
+    if (id.indexOf('sel:') === 0) {
+      var ring = ringItems();
+      for (var k = 0; k < ring.length; k++) {
+        if (ring[k].id === id) { menu.sel = (menu.sel === k) ? -1 : k; break; }
+      }
+      // choosing something is asking to see it: it used to open the options for
+      // a piano that stayed invisible until you also found "show"
+      if (menu.sel >= 0) {
+        var pm = /^sel:panel:(\d+)$/.exec(id);
+        var target = (id === 'sel:piano') ? piano : (pm ? panels[parseInt(pm[1], 10)] : null);
+        if (target && !target.on) {
+          target.on = true;
+          if (target === piano) piano.group.visible = true;
+          startPassthrough();
+          placeAll();
+          scheduleSave();
+        }
+      }
+      menu.idle = 0;
+      layoutMenu();
+      return;
+    }
+
+    if (id === 'addpanel') {
+      var added = addPanel();
+      if (added) { menu.sel = panels.length; scheduleSave(); }
+      layoutMenu();
+      return;
+    }
+
+
+    // these carry no argument, so they have to be read before the guard below
+    // that drops anything without one
+    if (id === 'lower' || id === 'higher') {
+      piano.drop = (id === 'lower')
+        ? Math.min(1.10, piano.drop + step * DROP_RATE)
+        : Math.max(0.10, piano.drop - step * DROP_RATE);
+      placeAll();
+      // these two live on the piano now, so they have to travel with it: the
+      // piano rose and the buttons stayed where they were, which put the one
+      // you were holding somewhere other than the thing it was moving all over
+      // again, only worse for having looked right at the start
+      layoutHandles();
+      scheduleSave();
+      return;
+    }
+
+    var colon = id.indexOf(':');
+    if (colon < 0) return;
+    var verb = id.slice(0, colon), arg = id.slice(colon + 1);
+
+    if (verb === 'hide') {
+      var target = (arg === 'piano') ? piano : panels[parseInt(arg, 10)];
+      if (target) {
+        target.on = !target.on;
+        if (target.on) startPassthrough();
+        placeAll(); scheduleSave();
+      }
+      if (piano.group) piano.group.visible = piano.on;
+      layoutMenu();
+      return;
+    }
+
+
+    if (verb === 'size') {
+      startSizing(arg === 'piano' ? piano : panels[parseInt(arg, 10)]);
+      return;
+    }
+
+    if (verb === 'move') {
+      menu.open = false;
+      grab(arg === 'piano' ? piano : panels[parseInt(arg, 10)]);
+      return;
+    }
+
+    var p = panels[parseInt(arg, 10)];
+    if (!p) { menu.sel = -1; layoutMenu(); return; }
+
+    if (verb === 'remove') {
+      removePanel(parseInt(arg, 10));
+      menu.sel = -1;
+      placeAll(); scheduleSave(); layoutMenu();
+      return;
+    }
+
+    scheduleSave();
+  }
+
+  function onTrigger() {
+    if (!inScene) return;
+    if (movingRig) { drop(); return; }
+    if (grabbedEdge) { releaseEdge(); return; }
+    if (sizingRig) { endSizing(); return; }
+    if (parking) { finishParking(); return; }
+    if (recentering) { finishRecenter(); return; }
+    if (gazeHit) { activate(gazeHit.userData.id, 0.08); cooldown = COOLDOWN; return; }
+    // button pressed while looking at nothing opens the menu at its parked spot
+    if (!menu.open) { menu.open = true; menu.sel = -1; menu.idle = 0; menuFound = true; layoutMenu(); }
+  }
+
+  // ---------- render ----------
+
+  var lc = new THREE.PerspectiveCamera(), rc = new THREE.PerspectiveCamera();
+  var IPD = 0.062;
+  var _screen = new THREE.Vector2();
+
+  // ---------- the lenses ----------
+  //
+  // A Cardboard lens magnifies unevenly: the further off its axis a thing sits,
+  // the more it stretches. Straight lines bow and the edges smear. Nothing in
+  // the picture is wrong, the glass is, and the cure is to bend the picture the
+  // opposite way first so that the lens bends it back straight.
+  //
+  // K1 and K2 are Google's Cardboard v2 profile. They say where a ray lands: one
+  // leaving the eye at tangent r from the lens axis meets the screen at
+  // r * (1 + K1 r^2 + K2 r^4). A v1 viewer is 0.441 and 0.156, and a viewer that
+  // carries its own QR profile will differ again.
+  //
+  // SET BOTH TO ZERO TO TURN THE WHOLE THING OFF. Everything below collapses to
+  // the flat rectangles that were here before, because the grid comes out
+  // straight and the render frustum comes out unchanged. That is the lever if
+  // this looks worse rather than better.
+  //
+  // It cannot be exactly right. A Cardboard QR code carries the physical width
+  // of the screen, the distance from the lens to it, and the gap between the
+  // lenses, and a web page can read none of them. This is the right shape with
+  // a stock profile, which is worth more than nothing and less than a fitted
+  // one.
+  var DIST_K1 = 0.34, DIST_K2 = 0.55;
+  var DIST_SEGMENTS = 32;
+
+  // Where r = 1 sits, as a fraction of the distance from the middle of a half
+  // screen to its corner.
+  //
+  // The profile's r is a fraction of the lens's own field, and a page cannot
+  // know how much of the glass a given phone fills. Measuring it across half
+  // the screen's WIDTH instead looked reasonable and was not: a half screen is
+  // not square, so on an iPad held upright the polynomial was being asked for
+  // r = 3, where these two numbers mean nothing at all and claim eleven times
+  // the stretch. The render frustum collapsed from 78 degrees to 36 chasing it.
+  //
+  // Measuring to the corner keeps r inside 0 to 1 however the thing is held.
+  // Raise this above 1 for less correction, lower it for more.
+  var DIST_FIELD = 1.0;
+
+  // THE TWO CIRCLES. A Cardboard lens is round and sits in a round hole, so the
+  // corners of each half screen are behind the housing and were never going to
+  // reach your eye. Blacking them is what the viewer does physically, and
+  // showing them is a lie about how much you can see.
+  //
+  // It is drawn on purpose here rather than left over. Getting the shape by
+  // building the warp the other way round, so that the edges of the screen fall
+  // off the edge of the rendered texture, throws away real picture to do it and
+  // leaves a ragged edge. This masks a correct, complete, screen-filling image,
+  // so there is as much inside the circle as there is anything to show.
+  //
+  // 1 makes each circle as wide as its half of the screen, which is the usual
+  // fit. Lower it if your viewer's hole is smaller than that. 0 turns the mask
+  // off and gives back the full rectangles.
+  var LENS_MASK = 1.0;
+  var LENS_FEATHER = 0.03;
+  var EYE_FOV = 78;
+
+  function distort(r) {
+    var r2 = r * r;
+    return r * (1 + DIST_K1 * r2 + DIST_K2 * r2 * r2);
+  }
+
+  // the r that distort() would send to target. Newton from the target itself,
+  // which is already close because the polynomial is gentle and monotonic.
+  function undistort(target) {
+    var r = target, i, r2, f, d;
+    for (i = 0; i < 8; i++) {
+      r2 = r * r;
+      f = r * (1 + DIST_K1 * r2 + DIST_K2 * r2 * r2) - target;
+      d = 1 + 3 * DIST_K1 * r2 + 5 * DIST_K2 * r2 * r2;
+      r -= f / d;
+    }
+    return r;
+  }
+
+  var rtL = null, rtR = null, warpScene = null, warpCam = null;
+  var warpL = null, warpR = null, warpW = 0, warpH = 0;
+  var warpTanX = 1, warpTanY = 1;
+
+  // The grid is laid out in SCREEN space and carries texture coordinates found
+  // by running the lens backwards. So every point of the half screen is filled,
+  // nothing is clipped, and no part of the rendered texture is wasted: the
+  // frustum is then chosen to be exactly the piece the grid actually asks for.
+  // Building it the other way round, by pushing the texture's own grid outwards,
+  // is what leaves the black rounded surround, and there is no need for it.
+  function buildWarp(halfW, halfH) {
+    var geo = new THREE.PlaneGeometry(2, 2, DIST_SEGMENTS, DIST_SEGMENTS);
+    var pos = geo.attributes.position, uv = geo.attributes.uv;
+    var yScale = halfH / halfW;          // round units: measured across the half screen
+    var R = Math.sqrt(1 + yScale * yScale) * DIST_FIELD;   // r = 1 at the corner
+    var n = pos.count, i;
+    var ux = new Float32Array(n), uy = new Float32Array(n), mx = 0, my = 0;
+
+    for (i = 0; i < n; i++) {
+      var qx = pos.getX(i), qy = pos.getY(i) * yScale;
+      var rs = Math.sqrt(qx * qx + qy * qy);
+      var k = rs > 1e-6 ? undistort(rs / R) * R / rs : 1;
+      ux[i] = qx * k; uy[i] = qy * k;
+      if (Math.abs(ux[i]) > mx) mx = Math.abs(ux[i]);
+      if (Math.abs(uy[i]) > my) my = Math.abs(uy[i]);
+    }
+    if (mx < 1e-6) mx = 1;
+    if (my < 1e-6) my = 1;
+    for (i = 0; i < n; i++) {
+      uv.setXY(i, 0.5 + 0.5 * ux[i] / mx, 0.5 + 0.5 * uy[i] / my);
+    }
+    uv.needsUpdate = true;
+
+    // Round units and tangents differ by one constant, the tangent at the
+    // horizontal edge of the half screen, so the frustum the texture wants is
+    // just the grid's own reach in those units.
+    var tanEdgeX = Math.tan(THREE.MathUtils.degToRad(EYE_FOV) / 2) * (halfW / halfH);
+    warpTanX = mx * tanEdgeX;
+    warpTanY = my * tanEdgeX;
+    return geo;
+  }
+
+  // The mask is measured on the vertex's own position, which is where it ends
+  // up on the screen after the warp has moved it, so the hole stays round
+  // rather than following the bend in the picture.
+  function lensMaterial(tex, yScale) {
+    return new THREE.ShaderMaterial({
+      depthTest: false,
+      uniforms: {
+        map: { value: tex },
+        yScale: { value: yScale },
+        maskR: { value: LENS_MASK },
+        feather: { value: LENS_FEATHER }
+      },
+      vertexShader: [
+        'varying vec2 vUv;',
+        'varying vec2 vLocal;',
+        'void main() {',
+        '  vUv = uv;',
+        '  vLocal = position.xy;',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform sampler2D map;',
+        'uniform float yScale;',
+        'uniform float maskR;',
+        'uniform float feather;',
+        'varying vec2 vUv;',
+        'varying vec2 vLocal;',
+        'void main() {',
+        '  vec4 c = texture2D(map, vUv);',
+        '  if (maskR > 0.0) {',
+        // round on the glass, not round in the picture: the half screen is
+        // taller than it is wide, so y is measured in the same units as x
+        '    float r = length(vec2(vLocal.x, vLocal.y * yScale));',
+        '    c.rgb *= 1.0 - smoothstep(maskR - feather, maskR, r);',
+        '  }',
+        '  gl_FragColor = vec4(c.rgb, 1.0);',
+        '}'
+      ].join('\n')
+    });
+  }
+
+  function ensureWarp(w, h) {
+    var pr = renderer.getPixelRatio();
+    var tw = Math.max(1, Math.floor(w / 2 * pr));
+    var th = Math.max(1, Math.floor(h * pr));
+    if (rtL && warpW === tw && warpH === th) return;
+    warpW = tw; warpH = th;
+
+    if (rtL) { rtL.dispose(); rtR.dispose(); }
+    var opt = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+    rtL = new THREE.WebGLRenderTarget(tw, th, opt);
+    rtR = new THREE.WebGLRenderTarget(tw, th, opt);
+
+    if (!warpScene) {
+      warpScene = new THREE.Scene();
+      warpCam = new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1);
+
+      // The line down the middle. It is what you line the viewer's septum up
+      // with, and losing it made the thing harder to put on straight.
+      var bar = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.006, 2),
+        new THREE.MeshBasicMaterial({ color: 0x6B6560, depthTest: false })
+      );
+      bar.renderOrder = 2;
+      warpScene.add(bar);
+    }
+    if (warpL) {
+      warpScene.remove(warpL); warpL.geometry.dispose(); warpL.material.dispose();
+      warpScene.remove(warpR); warpR.geometry.dispose(); warpR.material.dispose();
+    }
+    var geo = buildWarp(w / 2, h);
+    warpL = new THREE.Mesh(geo, lensMaterial(rtL.texture, h / (w / 2)));
+    warpR = new THREE.Mesh(geo.clone(), lensMaterial(rtR.texture, h / (w / 2)));
+    warpL.scale.x = 0.5; warpL.position.x = -0.5;
+    warpR.scale.x = 0.5; warpR.position.x = 0.5;
+    warpScene.add(warpL); warpScene.add(warpR);
+  }
+
+  function render(t) {
+    var now = (t || 0) / 1000;
+    var dt = lastT ? Math.min(now - lastT, 0.1) : 0.016;
+    lastT = now;
+
+    if (dragLook()) camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    else if ((mode === 'stereo' || mode === 'window') && orient) applyOrientation(camera);
+
+    updateGaze(dt);
+    updateWindowProjection();
+
+    if (mode === 'stereo') {
+      // CSS pixels, not the canvas backing store. setViewport and setScissor
+      // multiply by the pixel ratio themselves, so handing them domElement.width
+      // counted the ratio twice: on a 2x screen the left eye's viewport covered
+      // the whole canvas and the right eye's started one full width off the edge
+      // of it and drew nothing at all. One picture filling the screen is what
+      // that looks like, which is not a split screen and is not two eyes.
+      //
+      // Every phone and every iPad is 2x or better. The one place it looked
+      // right was a plain 1x desktop, which is the only place it ever got
+      // tested, which is the whole lesson.
+      renderer.getSize(_screen);
+      var w = _screen.x, h = _screen.y;
+      ensureWarp(w, h);
+      camera.updateMatrixWorld();
+      [lc, rc].forEach(function (c, i) {
+        // the frustum the grid asked for, rather than a round number, so the
+        // texture holds exactly the piece of the world the lens will show
+        c.fov = THREE.MathUtils.radToDeg(2 * Math.atan(warpTanY));
+        c.aspect = warpTanX / warpTanY;
+        c.near = 0.05; c.far = 1000;
+        c.updateProjectionMatrix();
+        c.position.setFromMatrixPosition(camera.matrixWorld);
+        c.quaternion.setFromRotationMatrix(camera.matrixWorld);
+        c.translateX((i === 0 ? -1 : 1) * IPD / 2);
+        c.updateMatrixWorld(true);
+      });
+      // an eye apiece into its own texture, then both of them through the glass
+      renderer.setRenderTarget(rtL);
+      renderer.render(scene, lc);
+      renderer.setRenderTarget(rtR);
+      renderer.render(scene, rc);
+      renderer.setRenderTarget(null);
+      renderer.setViewport(0, 0, w, h);
+      renderer.render(warpScene, warpCam);
+    } else {
+      renderer.render(scene, camera);
+    }
+  }
+
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    // a tab moved between screens changes this, and it decides how the two eyes
+    // are laid out, so it is re-read rather than fixed at startup
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function bindInput() {
+    var el = renderer.domElement;
+    function pt(e) { return e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }; }
+    var downX = 0, downY = 0, moved = 0;
+    function down(e) {
+      if (!dragLook()) { onTrigger(); return; }
+      dragging = true; var p = pt(e); dragX = p.x; dragY = p.y;
+      downX = p.x; downY = p.y; moved = 0;
+    }
+    function move(e) {
+      if (!dragging || !dragLook()) return;
+      var p = pt(e);
+      yaw -= (p.x - dragX) * 0.005;
+      pitch = Math.max(-1.5, Math.min(1.5, pitch - (p.y - dragY) * 0.005));
+      dragX = p.x; dragY = p.y;
+      moved = Math.max(moved, Math.abs(p.x - downX) + Math.abs(p.y - downY));
+    }
+    function up(e) {
+      if (dragging && inScene && moved < 8) {
+        if (mode === 'flat') tapAt(downX, downY);
+        else onTrigger();
+      }
+      dragging = false;
+    }
+
+    function tapAt(px, py) {
+      var r = el.getBoundingClientRect();
+      var ndc = new THREE.Vector2(
+        ((px - r.left) / r.width) * 2 - 1,
+        -((py - r.top) / r.height) * 2 + 1
+      );
+      if (movingRig || grabbedEdge || recentering || parking) {
+        if (movingRig) drop();
+        else if (grabbedEdge) releaseEdge();
+        else if (parking) finishParking();
+        else finishRecenter();
+        return;
+      }
+      raycaster.setFromCamera(ndc, camera);
+      var hits = raycaster.intersectObjects(pickables, false);
+      if (hits.length) { activate(hits[0].object.userData.id, 0.25); cooldown = COOLDOWN; }
+    }
+    el.addEventListener('mousedown', down);
+    el.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchmove', move, { passive: true });
+    el.addEventListener('touchend', function (e) { up(e); });
+    window.addEventListener('keydown', function (e) {
+      if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); onTrigger(); }
+    });
+  }
+
+  function applyOptions() {
+    // what you want in there with you is a decision for once you are in it
+    if (!currentEnv) enterRoom(document.getElementById('env').value);
+    piano.group.visible = piano.on;
+
+    // one camera serves everything, and nothing asks for it until something needs it
+    if (piano.on || panels.some(function (q) { return q.on; })) startPassthrough();
+
+    placeAll();
+    layoutMenu();
+    scheduleSave();
+  }
+
+  function showChrome(on) {
+    inScene = !!on;
+    ui.style.display = on ? 'none' : 'block';
+    hud.style.display = on ? 'flex' : 'none';
+    if (!on) {
+      movingRig = null; sizingRig = null; grabbedEdge = null;
+      recentering = false; parking = false; hintPlate.visible = false;
+    }
+    layoutMenu();
+  }
+
+  function enterVR() {
+    navigator.xr.requestSession('immersive-vr')
+      .then(function (session) {
+        applyOptions();
+        mode = 'xr';
+        framed = true;
+        renderer.xr.setSession(session);
+        session.addEventListener('select', onTrigger);
+        session.addEventListener('end', function () { mode = 'flat'; movingRig = null; sizingRig = null; grabbedEdge = null; recentering = false; parking = false; steady = 0; showChrome(false); });
+        showChrome(true);
+      })
+      .catch(function (e) {
+        errEl.textContent = 'VR would not start here (' + e.message + '). Falling back to split screen.';
+        enterStereo();
+      });
+  }
+
+  // The phone held up as a window on the room, moved about to look, rather
+  // than strapped to your face with the screen split. Same head tracking, same
+  // everything: only the screen is not divided and it does not want the phone
+  // held one way round, so it neither goes fullscreen nor locks the rotation.
+  // Nothing about how the stereo picture is drawn is touched by this.
+  // MOTION IS ASKED FOR FIRST, BEFORE ANYTHING ASKS FOR A CAMERA.
+  //
+  // On iOS both are permission prompts and both need the tap that opened them
+  // to still count as a user gesture. Laying the room out came first, and that
+  // asks for the camera as soon as a piano or a window is showing, which spends
+  // the gesture: by the time the motion request went out there was nothing left
+  // to authorise it, so it was refused without ever showing you the dialog and
+  // head tracking silently never started. Two pictures side by side that do not
+  // move when you do is what that looks like from the outside.
+  //
+  // Android never asked permission for motion at all, which is why this was
+  // only ever wrong in Safari, and only once you had something placed.
+  // Say it once, and say where the switch is. It is off by default on both,
+  // and it is the first thing to check on anything Apple made.
+  function noTracking() {
+    errEl.textContent = 'No head tracking here, so drag to look around. ' +
+      'On iPhone and iPad: Settings, Apps, Safari, Motion & Orientation Access.';
+  }
+
+  function enterWindow() {
+    enableOrientation().then(function (ok) {
+      applyOptions();
+      mode = 'window';
+      yawOffset = 0;
+      framed = false;
+      pendingRecenter = true;
+      if (orient) doRecenter();
+      showChrome(true);
+      if (!ok) noTracking();
+    });
+  }
+
+  function enterStereo() {
+    enableOrientation().then(function (ok) {
+      applyOptions();
+      mode = 'stereo';
+      yawOffset = 0;
+      framed = false;
+      pendingRecenter = true;
+      if (orient) doRecenter();
+      showChrome(true);
+      var el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(function () {});
+      if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {});
+      if (!ok) noTracking();
+    });
+  }
+
+  init();
+  bindInput();
+  loadState();
+
+  var envEl = document.getElementById('env');
+  var tiles = document.querySelectorAll('.tile');
+
+  function showEnv(value) {
+    envEl.value = value;
+    for (var i = 0; i < tiles.length; i++) {
+      tiles[i].setAttribute('aria-pressed', tiles[i].getAttribute('data-env') === value ? 'true' : 'false');
+    }
+    if (value === currentEnv) { loadSky(value); return; }
+    enterRoom(value);
+    loadSky(value);
+    scheduleSave();
+  }
+  for (var t = 0; t < tiles.length; t++) {
+    tiles[t].addEventListener('click', function () { showEnv(this.getAttribute('data-env')); });
+  }
+  envEl.addEventListener('change', function (e) { showEnv(e.target.value); });
+  showEnv(envEl.value);
+
+  var note = document.getElementById('modeNote');
+  note.textContent = '';
+
+  // Putting it on your face is one thing to do and immersive-vr is one call,
+  // and the device is the one that knows which of them it means: a phone hands
+  // it to Cardboard, with the lens correction and the divider and the viewer's
+  // own profile, and a headset makes it a headset session. Neither needs
+  // detecting, which is the whole point, because detecting it is what could not
+  // be done and what kept being got wrong.
+  //
+  // Our split screen is the fallback for a phone with no session to give, an
+  // iPhone being the one that matters. It is the only place it is ever the
+  // right answer, and routing every phone to it is what took away the picture
+  // that worked.
+  var btnStereo = document.getElementById('enter');
+  btnStereo.onclick = function () { enterStereo(); };
+
+  // The phone as a window in your hand, which is the one way in with no session
+  // behind it on any device. It does not take immersive-vr even where there is
+  // one: that is the button above, whichever kind of face-mounted thing it turns
+  // out to mean.
+  var btn360 = document.getElementById('use360');
+  btn360.onclick = function () { enterWindow(); };
+
+  if (navigator.xr && navigator.xr.isSessionSupported) {
+    navigator.xr.isSessionSupported('immersive-vr').then(function (ok) {
+      if (ok) btnStereo.onclick = function () { enterVR(); };
+    }).catch(function () {});
+  }
+
+  document.getElementById('forget').onclick = function () {
+    forgetting = true;
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    // v2 held an arrangement per room and v1 one global set placed differently;
+    // neither is read any more, but leaving them behind makes "fresh" a lie
+    try {
+      localStorage.removeItem(STORE_KEY);
+      localStorage.removeItem('hill-practice-space-v2');
+      localStorage.removeItem('hill-practice-space-v1');
+    } catch (e) {}
+    location.reload();
+  };
+  document.getElementById('peek').onclick = function () { applyOptions(); mode = 'flat'; showChrome(true); };
+  document.getElementById('exit').onclick = leaveScene;
+  document.getElementById('recenter').onclick = doRecenter;
+}
+
+function startPracticeSpace() {
+  try { bootPracticeSpace(); }
+  catch (err) {
+    var e = document.getElementById('err');
+    if (e) e.textContent = 'The 3D view could not start here: ' + err.message;
+  }
+}
+// ---------- the PIN ----------
+//
+// Be clear about what this is and is not. Everything here runs on the visitor's
+// device, so this keeps the page out of search results and out of the reach of
+// anyone who merely stumbles on the link. It is not protection: the panoramas
+// sit at their own URLs, and anyone who reads the page source can walk straight
+// past this. If it needs to be genuinely private the gate has to live in front
+// of the server, and amandacowell.com already goes through Cloudflare, whose
+// Access product does exactly that with no change to this file.
+//
+// To change the password, replace the hash below with the SHA-256 of the new
+// one, for instance from: echo -n music | sha256sum
+var GATE_KEY = 'hill-practice-unlocked-v1';
+var PIN_SHA256 = '80f189984e5ca70287d13342f6daa0db45cba3c131c4e46dc81360f3a4c4f690';
+
+function sha256Hex(text) {
+  var bytes = new TextEncoder().encode(text);
+  return crypto.subtle.digest('SHA-256', bytes).then(function (buf) {
+    return Array.prototype.map.call(new Uint8Array(buf), function (x) {
+      return ('00' + x.toString(16)).slice(-2);
+    }).join('');
+  });
+}
+
+function openTheDoor() {
+  var gate = document.getElementById('gate');
+  if (gate) gate.style.display = 'none';
+  document.getElementById('ui').style.display = 'block';
+  startPracticeSpace();
+}
+
+function setUpGate() {
+  var unlocked = false;
+  try { unlocked = localStorage.getItem(GATE_KEY) === 'yes'; } catch (e) {}
+  if (unlocked) { openTheDoor(); return; }
+
+  var form = document.getElementById('gateForm');
+  var input = document.getElementById('pin');
+  var err = document.getElementById('gateErr');
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var tried = input.value.trim().toLowerCase();
+    if (!tried) return;
+    sha256Hex(tried).then(function (h) {
+      if (h === PIN_SHA256) {
+        try { localStorage.setItem(GATE_KEY, 'yes'); } catch (e2) {}
+        openTheDoor();
+      } else {
+        err.textContent = 'Not that one.';
+        input.value = '';
+        input.focus();
+      }
+    }).catch(function () {
+      err.textContent = 'This browser will not do the check. Open the page over https.';
+    });
+  });
+  input.focus();
+}
+
+if (document.readyState === 'complete') setUpGate();
+else window.addEventListener('load', setUpGate);
+</script>
+
+</body>
+</html>
