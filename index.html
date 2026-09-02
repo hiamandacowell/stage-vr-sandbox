@@ -109,6 +109,13 @@
   :focus-visible{outline:2px solid var(--brass);outline-offset:2px;}
 
   .note{font-size:12.8px;color:var(--muted);line-height:1.6;margin:16px 0 0;}
+  #scorefile{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+  .pickfile{
+    display:block;width:100%;padding:15px;margin-top:10px;box-sizing:border-box;
+    font-size:16px;text-align:center;border:1px dashed var(--line);border-radius:10px;
+    background:transparent;color:var(--muted);cursor:pointer;
+  }
+  .pickfile.has{border-style:solid;color:var(--text);}
   ul.note{margin:20px 0 0;padding:0;list-style:none;}
   ul.note li{position:relative;padding:0 0 0 16px;margin:0 0 7px;}
   ul.note li::before{
@@ -198,6 +205,11 @@
   <button class="ghost" id="peek">
     <b>Browser</b><span>A laptop, drag with the mouse to look around</span>
   </button>
+  <!-- A file picker cannot be operated with a phone strapped to your face, so
+       the music is chosen out here, before you go in, like the room is. -->
+  <label class="pickfile" for="scorefile" id="scorelabel">Load a page of music</label>
+  <input type="file" id="scorefile" accept="image/*">
+
   <button class="ghost" id="forget">Forget my setup and start fresh</button>
 
   <p class="note" id="modeNote"></p>
@@ -537,6 +549,130 @@ function bootPracticeSpace() {
     return new THREE.PlaneGeometry(1, 1);
   }
 
+  // ---------- the music ----------
+  //
+  // A page of music behaves like a window in every way that matters: it hangs
+  // at a bearing and an elevation, it is moved by looking and holding still,
+  // and it is sized by dragging an edge. So it is a panel, and all of that
+  // comes for free. Two things are its own.
+  //
+  // IT KEEPS ITS PROPORTIONS. A window can be any shape because it is a hole;
+  // a page cannot, because stretching it is a lie about the notes. So it gets
+  // the piano's two handles rather than a window's four, and dragging one
+  // takes the other with it.
+  //
+  // IT SHOWS A PICTURE RATHER THAN THE CAMERA. Everything else in here that
+  // looks like a window is one.
+  var score = {
+    kind: 'panel', on: false, music: true, aspect: 0,
+    azim: RIG_YAW, elev: THREE.MathUtils.degToRad(-6), dist: 0.95,
+    w: 0.80, h: 1.04,
+    group: null, win: null, tex: null
+  };
+
+  function scoreMaterial() {
+    return new THREE.MeshBasicMaterial({ color: 0x000000 });
+  }
+
+  // A phone photograph can be bigger than the GPU will hold, and what comes
+  // back from a card that has been asked for too much is nothing at all rather
+  // than something smaller. So it is measured first and drawn down to fit.
+  function textureFromImage(img) {
+    var max = renderer.capabilities.maxTextureSize || 4096;
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    var k = Math.min(1, max / Math.max(w, h));
+    var tex;
+    if (k < 1) {
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * k));
+      c.height = Math.max(1, Math.round(h * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      tex = new THREE.CanvasTexture(c);
+    } else {
+      tex = new THREE.Texture(img);
+      tex.needsUpdate = true;
+    }
+    // No mipmaps and linear both ways. Mipmaps want a power of two on WebGL1
+    // and would be silently dropped there, and the page is going to be
+    // magnified rather than shrunk, which is the case they do not help.
+    // Anisotropy is what keeps it legible when the page is not square to you.
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    tex.needsUpdate = true;
+    return { tex: tex, aspect: w / h };
+  }
+
+  function setScore(img) {
+    var made = textureFromImage(img);
+    if (score.tex) score.tex.dispose();
+    score.tex = made.tex;
+    score.aspect = made.aspect;
+    if (!score.group) {
+      score.group = new THREE.Group();
+      score.win = new THREE.Mesh(panelGeometry(), scoreMaterial());
+      score.group.add(score.win);
+      scene.add(score.group);
+    }
+    score.win.material.map = score.tex;
+    score.win.material.color.set(0xFFFFFF);
+    score.win.material.needsUpdate = true;
+    // a page starts upright at whatever it actually is, rather than at the
+    // shape the last one happened to be
+    score.h = score.w / score.aspect;
+    score.on = true;
+    placeAll();
+    layoutMenu();
+    scheduleSave();
+  }
+
+  // Kept in IndexedDB rather than localStorage, which holds about 5MB of text
+  // and would refuse a photograph. The picture is the one thing here that is
+  // too big for the place everything else lives.
+  var SCORE_DB = 'stage-vr-sandbox', SCORE_KEY = 'score-image';
+  function scoreStore(mode, fn) {
+    try {
+      var rq = indexedDB.open(SCORE_DB, 1);
+      rq.onupgradeneeded = function () { rq.result.createObjectStore('files'); };
+      rq.onsuccess = function () {
+        var db = rq.result;
+        if (!db.objectStoreNames.contains('files')) { fn(null); return; }
+        var tx = db.transaction('files', mode);
+        fn(tx.objectStore('files'));
+      };
+      rq.onerror = function () { fn(null); };
+    } catch (e) { fn(null); }
+  }
+
+  function saveScoreFile(file) {
+    scoreStore('readwrite', function (st) { if (st) st.put(file, SCORE_KEY); });
+  }
+
+  function loadScoreFile(done) {
+    scoreStore('readonly', function (st) {
+      if (!st) { done(null); return; }
+      var g = st.get(SCORE_KEY);
+      g.onsuccess = function () { done(g.result || null); };
+      g.onerror = function () { done(null); };
+    });
+  }
+
+  function imageFromBlob(blob, done) {
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function () { done(img); };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      // HEIC is the one that lands here: it is what an iPhone shoots by
+      // default and no browser will decode it into a canvas.
+      errEl.textContent = 'That picture could not be opened. If it came from an ' +
+        'iPhone it may be HEIC; a screenshot or a JPEG will work.';
+      done(null);
+    };
+    img.src = url;
+  }
+
   function makePanel(init) {
     var p = {
       kind: 'panel', on: true,
@@ -710,6 +846,10 @@ function bootPracticeSpace() {
 
   function placeAll() {
     placePiano();
+    if (score.group) {
+      score.group.visible = score.on;
+      if (score.on) placePanel(score);
+    }
     for (var i = 0; i < panels.length; i++) {
       panels[i].group.visible = panels[i].on;
       placePanel(panels[i]);
@@ -912,6 +1052,16 @@ function bootPracticeSpace() {
       g.lineTo(34, 44);
       g.stroke();
       g.beginPath(); g.arc(18, 6, 5, 0, 6.284); g.fill();
+      return;
+    }
+    if (name === 'music') {
+      var i2;
+      for (i2 = -2; i2 <= 2; i2++) {
+        g.beginPath(); g.moveTo(-46, i2 * 11); g.lineTo(30, i2 * 11); g.stroke();
+      }
+      g.beginPath(); g.ellipse(6, 22, 13, 9, -0.35, 0, 6.284); g.fill();
+      g.lineWidth = 6;
+      g.beginPath(); g.moveTo(18, 20); g.lineTo(18, -34); g.stroke();
       return;
     }
     if (name === 'movemenu') {
@@ -1155,6 +1305,7 @@ function bootPracticeSpace() {
       });
     }
     if (panels.length < PANEL_MAX) out.push({ id: 'addpanel', icon: 'addwindow', label: 'window', group: 0 });
+    if (score.tex) out.push({ id: 'sel:score', icon: 'music', label: 'music', group: 0 });
     out.push({ id: 'recenter', icon: 'recenter', label: 'recenter', group: 0 });
     // The way out of this room, where this room's way out lives in the menu.
     // It goes at the end of the group about this room and what is in it, so
@@ -1193,6 +1344,13 @@ function bootPracticeSpace() {
         { id: 'move:piano', icon: 'move', label: 'move' },
         { id: 'size:piano', icon: 'size', label: 'size' },
         { id: 'hide:piano', icon: piano.on ? 'hide' : 'show', label: piano.on ? 'hide' : 'show' }
+      ];
+    }
+    if (ringId === 'sel:score') {
+      return [
+        { id: 'move:score', icon: 'move', label: 'move' },
+        { id: 'size:score', icon: 'size', label: 'size' },
+        { id: 'hide:score', icon: score.on ? 'hide' : 'show', label: score.on ? 'hide' : 'show' }
       ];
     }
     var m = /^sel:panel:(\d+)$/.exec(ringId || '');
@@ -1447,6 +1605,8 @@ function bootPracticeSpace() {
         env: currentEnv || document.getElementById('env').value,
         menuFound: !!menuFound,
         menuPitch: menu.tabPitch,
+        score: { on: !!score.on, azim: score.azim, elev: score.elev,
+                 dist: score.dist, w: score.w },
         stagePianoOn: stagePiano(),
         piano: {
           yaw: piano.yaw, drop: piano.drop, dist: piano.dist, width: piano.width
@@ -1506,6 +1666,14 @@ function bootPracticeSpace() {
     }
     menuFound = !!s.menuFound;
     menu.tabPitch = num(s.menuPitch, menu.tabPitch, TAB_MIN, TAB_MAX);
+
+    if (s.score && typeof s.score === 'object') {
+      score.on   = !!s.score.on;
+      score.azim = num(s.score.azim, score.azim, -Math.PI, Math.PI);
+      score.elev = num(s.score.elev, score.elev, -1.5, 1.5);
+      score.dist = num(s.score.dist, score.dist, 0.35, 1.80);
+      score.w    = num(s.score.w,    score.w,    0.25, 2.40);
+    }
     stagePianoOn = !!s.stagePianoOn;
 
     if (s.piano && typeof s.piano === 'object') {
@@ -1868,7 +2036,11 @@ function bootPracticeSpace() {
     var newHalf = Math.abs(moved - fixed) / 2;
     _c.addScaledVector(axis, (moved + fixed) / 2);
 
-    if (r.kind === 'panel') {
+    if (r.music) {
+      // one number, and the other follows it, so the notes keep their shape
+      r.w = newHalf * 2;
+      r.h = r.aspect ? r.w / r.aspect : r.h;
+    } else if (r.kind === 'panel') {
       if (horiz) r.w = newHalf * 2; else r.h = newHalf * 2;
     } else {
       r.width = Math.max(0.40, Math.min(2.40, newHalf / 0.67));
@@ -1890,8 +2062,9 @@ function bootPracticeSpace() {
     if (!r) return;
     rigFrame(r);
     var h = head();
-    // a piano keeps its proportions, so only its sides are worth a handle
-    var n = (r.kind === 'panel') ? 4 : 2;
+    // a piano keeps its proportions, and so does a page of music, so only
+    // their sides are worth a handle
+    var n = (r.kind === 'panel' && !r.music) ? 4 : 2;
     for (i = 0; i < n; i++) {
       var e = EDGES[i], t = menu.handles[i];
       var horiz = (e.side === 'left' || e.side === 'right');
@@ -2162,11 +2335,13 @@ function bootPracticeSpace() {
       // a piano that stayed invisible until you also found "show"
       if (menu.sel >= 0) {
         var pm = /^sel:panel:(\d+)$/.exec(id);
-        var target = (id === 'sel:piano') ? piano : (pm ? panels[parseInt(pm[1], 10)] : null);
+        var target = (id === 'sel:piano') ? piano
+                   : (id === 'sel:score') ? (score.tex ? score : null)
+                   : (pm ? panels[parseInt(pm[1], 10)] : null);
         if (target && !target.on) {
           target.on = true;
           if (target === piano) piano.group.visible = true;
-          startPassthrough();
+          if (target !== score) startPassthrough();
           placeAll();
           scheduleSave();
         }
@@ -2204,8 +2379,14 @@ function bootPracticeSpace() {
     if (colon < 0) return;
     var verb = id.slice(0, colon), arg = id.slice(colon + 1);
 
+    function rigFor(a) {
+      if (a === 'piano') return piano;
+      if (a === 'score') return score.tex ? score : null;
+      return panels[parseInt(a, 10)];
+    }
+
     if (verb === 'hide') {
-      var target = (arg === 'piano') ? piano : panels[parseInt(arg, 10)];
+      var target = rigFor(arg);
       if (target) {
         target.on = !target.on;
         if (target.on) startPassthrough();
@@ -2218,7 +2399,7 @@ function bootPracticeSpace() {
 
 
     if (verb === 'size') {
-      startSizing(arg === 'piano' ? piano : panels[parseInt(arg, 10)]);
+      startSizing(rigFor(arg));
       return;
     }
 
@@ -2714,6 +2895,41 @@ function bootPracticeSpace() {
       if (ok) btnStereo.onclick = function () { enterVR(); };
     }).catch(function () {});
   }
+
+  var scoreInput = document.getElementById('scorefile');
+  var scoreLabel = document.getElementById('scorelabel');
+
+  function markScoreLoaded(name) {
+    scoreLabel.textContent = name ? ('Music loaded: ' + name) : 'Load a page of music';
+    scoreLabel.className = name ? 'pickfile has' : 'pickfile';
+  }
+
+  scoreInput.onchange = function () {
+    var f = scoreInput.files && scoreInput.files[0];
+    if (!f) return;
+    errEl.textContent = '';
+    imageFromBlob(f, function (img) {
+      if (!img) { markScoreLoaded(null); return; }
+      setScore(img);
+      saveScoreFile(f);
+      markScoreLoaded(f.name);
+    });
+  };
+
+  // put the last one back, so going in and out to judge a size does not mean
+  // finding the file again every time
+  loadScoreFile(function (blob) {
+    if (!blob) return;
+    imageFromBlob(blob, function (img) {
+      if (!img) return;
+      var wasOn = score.on;
+      setScore(img);
+      score.on = wasOn || score.on;
+      markScoreLoaded(blob.name || 'saved page');
+      placeAll();
+      layoutMenu();
+    });
+  });
 
   document.getElementById('forget').onclick = function () {
     forgetting = true;
